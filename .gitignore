@@ -1,0 +1,10 @@
+*.pdsbak
+*.workspace
+*.htm
+*.html
+*.tmp
+*.obj
+*.hex
+*.miu
+Objects/
+Backup Of *
