@@ -1,4 +1,4 @@
-#include<reg51.h>
+#include<reg52.h>
 
 sbit LED27 = P2^7;
 sbit LED26 = P2^6;
@@ -7,7 +7,7 @@ sbit LED24 = P2^4;
 
 // for 12MHz
 void delay_1s(){
-	unsigned char i,j,k;
+	unsigned int i,j,k;
 	for(i = 98;i > 0; i--)
 	for(j = 101; j > 0; j--)
 	for(k = 49; k > 0; k--);
