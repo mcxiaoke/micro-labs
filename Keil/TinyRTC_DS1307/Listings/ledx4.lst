@@ -1,0 +1,222 @@
+C51 COMPILER V9.56.0.0   LEDX4                                                             07/22/2017 22:55:55 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE LEDX4
+OBJECT MODULE PLACED IN .\Objects\ledx4.obj
+COMPILER INVOKED BY: C:\Keil\ARM\C51\BIN\C51.EXE ledx4.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\le
+                    -dx4.lst) TABS(2) OBJECT(.\Objects\ledx4.obj)
+
+line level    source
+
+   1          #include "7seg.h"
+   2          #include "rtc.h"
+   3          #include <reg51.h>
+   4          
+   5          // https://exploreembedded.com/wiki/8051_Family_C_Library
+   6          // for STC89C52RC
+   7          
+   8          // upside l->r
+   9          sbit k1 = P1 ^ 5; //1 12
+  10          sbit SA = P1 ^ 4; //a 11
+  11          sbit SF = P1 ^ 3; //f 10
+  12          sbit k2 = P1 ^ 2; //2 9
+  13          sbit k3 = P1 ^ 1; //3 8
+  14          sbit SB = P1 ^ 0; //b 7
+  15          
+  16          // downside l->r
+  17          sbit SE = P2 ^ 0; //e 1
+  18          sbit SD = P2 ^ 1; //d 2
+  19          sbit SZ = P2 ^ 2; //dp 3
+  20          sbit SC = P2 ^ 3; //c 4
+  21          sbit SG = P2 ^ 4; //g 5
+  22          sbit k4 = P2 ^ 5; //4 6
+  23          
+  24          unsigned int num;
+  25          unsigned int seconds = 9753;
+  26          unsigned int temp, d1, d2, d3, d4;
+  27          
+  28          void delay_1s()
+  29          {
+  30   1          unsigned int i, j, k;
+  31   1          for (i = 98; i > 0; i--)
+  32   1              for (j = 101; j > 0; j--)
+  33   1                  for (k = 49; k > 0; k--)
+  34   1                      ;
+  35   1      }
+  36          
+  37          void turn_off()
+  38          {
+  39   1          k1 = k2 = k3 = k4 = 1;
+  40   1      }
+  41          
+  42          void T0_timer() interrupt 1
+  43          {
+  44   1          TH0 = (65536 - 45872) / 256;
+  45   1          TL0 = (65536 - 45872) % 256;
+  46   1          // 10ms * 100 = 1sec
+  47   1          num++;
+  48   1          if (num == 100) {
+  49   2              num = 0;
+  50   2              seconds++;
+  51   2          }
+  52   1      }
+  53          
+  54          void show_num(unsigned char num)
+C51 COMPILER V9.56.0.0   LEDX4                                                             07/22/2017 22:55:55 PAGE 2   
+
+  55          {
+  56   1          unsigned char c = CATHODE[num];
+  57   1          SA = (c >> 0) & 0x01;
+  58   1          SB = (c >> 1) & 0x01;
+  59   1          SC = (c >> 2) & 0x01;
+  60   1          SD = (c >> 3) & 0x01;
+  61   1          SE = (c >> 4) & 0x01;
+  62   1          SF = (c >> 5) & 0x01;
+  63   1          SG = (c >> 6) & 0x01;
+  64   1          SZ = (c >> 7) & 0x01;
+  65   1      }
+  66          
+  67          void delay(unsigned int z)
+  68          {
+  69   1          unsigned int i, j;
+  70   1          for (i = z; i > 0; i--)
+  71   1              for (j = 110; j > 0; j--)
+  72   1                  ;
+  73   1      }
+  74          
+  75          void update_led()
+  76          {
+  77   1          temp = seconds;
+  78   1          if (temp > 9999) {
+  79   2              temp = temp % 1000;
+  80   2          }
+  81   1          d1 = temp / 1000;
+  82   1          temp = temp % 1000;
+  83   1          d2 = temp / 100;
+  84   1          temp = temp % 100;
+  85   1          d3 = temp / 10;
+  86   1          temp = temp % 10;
+  87   1          d4 = temp;
+  88   1          turn_off();
+  89   1          k1 = 0;
+  90   1          show_num(d1);
+  91   1          delay(5);
+  92   1          turn_off();
+  93   1          k2 = 0;
+  94   1          show_num(d2);
+  95   1          delay(5);
+  96   1          turn_off();
+  97   1          k3 = 0;
+  98   1          show_num(d3);
+  99   1          delay(5);
+ 100   1          turn_off();
+ 101   1          k4 = 0;
+ 102   1          show_num(d4);
+ 103   1          delay(5);
+ 104   1      }
+ 105          
+ 106          int bcd_decimal(uint8_t hex)
+ 107          {
+ 108   1          return ((hex & 0xF0) >> 4) * 10 + (hex & 0x0F);
+ 109   1      }
+ 110          
+ 111          int year, month, day;
+ 112          int hour, min, sec;
+ 113          void read_time()
+ 114          {
+ 115   1          rtc_t rtc;
+ 116   1          RTC_Init();
+C51 COMPILER V9.56.0.0   LEDX4                                                             07/22/2017 22:55:55 PAGE 3   
+
+ 117   1          // rtc.hour = 0x22; //  22/56/00
+ 118   1          // rtc.min =  0x56;
+ 119   1          // rtc.sec =  0x00;
+ 120   1          // rtc.date = 0x22; // 2017/07/22
+ 121   1          // rtc.month = 0x07;
+ 122   1          // rtc.year = 0x17;
+ 123   1          // rtc.weekDay = 5;
+ 124   1          // RTC_SetDateTime(&rtc);
+ 125   1          RTC_GetDateTime(&rtc);
+ 126   1          year = bcd_decimal(rtc.year);
+ 127   1          month = bcd_decimal(rtc.month);
+ 128   1          day = bcd_decimal(rtc.date);
+ 129   1          hour = bcd_decimal(rtc.hour);
+ 130   1          min = bcd_decimal(rtc.min);
+ 131   1          sec = bcd_decimal(rtc.sec);
+ 132   1      }
+ 133          
+ 134          void main()
+ 135          {
+ 136   1          read_time();
+ 137   1          while (1) {
+ 138   2              if (hour < 99) {
+ 139   3                  turn_off();
+ 140   3                  k1 = 0;
+ 141   3                  show_num(hour / 10);
+ 142   3                  delay(5);
+ 143   3                  turn_off();
+ 144   3                  k2 = 0;
+ 145   3                  show_num(hour % 10);
+ 146   3                  delay(5);
+ 147   3              } else {
+ 148   3                  turn_off();
+ 149   3                  k1 = 0;
+ 150   3                  show_num(0);
+ 151   3                  delay(5);
+ 152   3                  turn_off();
+ 153   3                  k2 = 0;
+ 154   3                  show_num(0);
+ 155   3                  delay(5);
+ 156   3              }
+ 157   2              if (min < 99) {
+ 158   3                  turn_off();
+ 159   3                  k3 = 0;
+ 160   3                  show_num(min / 10);
+ 161   3                  delay(5);
+ 162   3                  turn_off();
+ 163   3                  k4 = 0;
+ 164   3                  show_num(min % 10);
+ 165   3                  delay(5);
+ 166   3              } else {
+ 167   3                  turn_off();
+ 168   3                  k3 = 0;
+ 169   3                  show_num(0);
+ 170   3                  delay(5);
+ 171   3                  turn_off();
+ 172   3                  k4 = 0;
+ 173   3                  show_num(0);
+ 174   3                  delay(5);
+ 175   3              }
+ 176   2          }
+ 177   1      }
+ 178          
+C51 COMPILER V9.56.0.0   LEDX4                                                             07/22/2017 22:55:55 PAGE 4   
+
+ 179          void main0()
+ 180          {
+ 181   1          turn_off();
+ 182   1          TMOD = 0;
+ 183   1          // 11.0592MHz - 45872
+ 184   1          TH0 = (65536 - 45872) / 256;
+ 185   1          TL0 = (65536 - 45872) % 256;
+ 186   1          EA = 1;
+ 187   1          ET0 = 1;
+ 188   1          TR0 = 1;
+ 189   1          while (1) {
+ 190   2              update_led();
+ 191   2          }
+ 192   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    627    ----
+   CONSTANT SIZE    =     32    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     26       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
