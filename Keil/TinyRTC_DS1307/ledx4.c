@@ -1,6 +1,9 @@
 #include "7seg.h"
+#include "debug.h"
 #include "rtc.h"
 #include <reg51.h>
+#include <stdio.h>
+#include <string.h>
 
 // https://exploreembedded.com/wiki/8051_Family_C_Library
 // for STC89C52RC
@@ -103,25 +106,31 @@ void update_led()
     delay(5);
 }
 
-int bcd_decimal(uint8_t hex)
+uint8_t bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
+uint8_t bin2bcd (uint8_t val) { return val + 6 * (val / 10); }
+
+uint8_t bcd_decimal(uint8_t hex)
 {
-    return ((hex & 0xF0) >> 4) * 10 + (hex & 0x0F);
+    return (uint8_t)((hex & 0xF0) >> 4) * 10 + (hex & 0x0F);
 }
 
 int year, month, day;
 int hour, min, sec;
+char idata buf[32];
+int n;
 void read_time()
 {
     rtc_t rtc;
     RTC_Init();
-    // rtc.hour = 0x22; //  22/56/00
-    // rtc.min =  0x56;
+    // rtc.hour = 0x09; //  09/30/00
+    // rtc.min =  0x58;
     // rtc.sec =  0x00;
-    // rtc.date = 0x22; // 2017/07/22
+    // rtc.date = 0x23; // 2017/07/23
     // rtc.month = 0x07;
     // rtc.year = 0x17;
     // rtc.weekDay = 5;
     // RTC_SetDateTime(&rtc);
+    delay_1s();
     RTC_GetDateTime(&rtc);
     year = bcd_decimal(rtc.year);
     month = bcd_decimal(rtc.month);
@@ -129,20 +138,29 @@ void read_time()
     hour = bcd_decimal(rtc.hour);
     min = bcd_decimal(rtc.min);
     sec = bcd_decimal(rtc.sec);
+    delay_1s();
+    n = sprintf(buf, "%x/%x/%x,", rtc.year, rtc.month, rtc.date);
+    n = sprintf(buf+n, "%x:%x:%x\n", rtc.hour, rtc.min, rtc.sec);
+    dLog(buf);
+    // memset(&buf[0], 0, sizeof(buf));
+    // n = sprintf(buf, "%02u/%02u/%02u,", year, month, day);
+    // n = sprintf(buf+n, "%02u:%02u:%02u\n", hour, min, sec);
+    // dLog(buf);
 }
 
 void main()
 {
+    dInit();
     read_time();
     while (1) {
-        if (hour < 99) {
+        if (year < 99) {
             turn_off();
             k1 = 0;
-            show_num(hour / 10);
+            show_num(year / 10);
             delay(5);
             turn_off();
             k2 = 0;
-            show_num(hour % 10);
+            show_num(year % 10);
             delay(5);
         } else {
             turn_off();
@@ -154,14 +172,14 @@ void main()
             show_num(0);
             delay(5);
         }
-        if (min < 99) {
+        if (month < 99) {
             turn_off();
             k3 = 0;
-            show_num(min / 10);
+            show_num(month / 10);
             delay(5);
             turn_off();
             k4 = 0;
-            show_num(min % 10);
+            show_num(month % 10);
             delay(5);
         } else {
             turn_off();

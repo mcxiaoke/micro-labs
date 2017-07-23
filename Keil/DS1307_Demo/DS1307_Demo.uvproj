@@ -46,7 +46,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>.\Objects\</OutputDirectory>
-          <OutputName>TinyRTC_DS1307</OutputName>
+          <OutputName>DS1307_Demo</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -370,9 +370,19 @@
               <FilePath>.\STARTUP.A51</FilePath>
             </File>
             <File>
-              <FileName>ledx4.c</FileName>
+              <FileName>ds1307.c</FileName>
               <FileType>1</FileType>
-              <FilePath>.\ledx4.c</FilePath>
+              <FilePath>.\ds1307.c</FilePath>
+            </File>
+            <File>
+              <FileName>debug.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\debug.c</FilePath>
+            </File>
+            <File>
+              <FileName>delay.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\delay.c</FilePath>
             </File>
             <File>
               <FileName>i2c.c</FileName>
@@ -383,16 +393,6 @@
               <FileName>rtc.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\rtc.c</FilePath>
-            </File>
-            <File>
-              <FileName>delay.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\delay.c</FilePath>
-            </File>
-            <File>
-              <FileName>debug.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\debug.c</FilePath>
             </File>
           </Files>
         </Group>
