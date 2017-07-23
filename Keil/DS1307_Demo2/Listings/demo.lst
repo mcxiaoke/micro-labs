@@ -1,0 +1,63 @@
+C51 COMPILER V9.56.0.0   DEMO                                                              07/23/2017 18:39:40 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE DEMO
+OBJECT MODULE PLACED IN .\Objects\demo.obj
+COMPILER INVOKED BY: C:\Keil\ARM\C51\BIN\C51.EXE demo.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\dem
+                    -o.lst) TABS(2) OBJECT(.\Objects\demo.obj)
+
+line level    source
+
+   1          #include "Includes.h"
+   2          #include "debug.h"
+   3          #include <stdio.h>
+   4          #include <string.h>
+   5          
+   6          void delay_1s()
+   7          {
+   8   1          unsigned int i, j, k;
+   9   1          for (i = 88; i > 0; i--)
+  10   1              for (j = 71; j > 0; j--)
+  11   1                  for (k = 40; k > 0; k--)
+  12   1                      ;
+  13   1      }
+  14          
+  15          void read()
+  16          {
+  17   1          char buf[16] = { 0 };
+  18   1          unsigned char rtc[8];
+  19   1          unsigned char* d;
+  20   1          unsigned char* t;
+  21   1          TI = 1;
+  22   1          d = Get_DS1307_RTC_Date();
+  23   1          printf("%d/%d/%d ", (int)d[3], (int)d[2], (int)d[1]);
+  24   1          memset(buf, 0, sizeof(buf));
+  25   1          t = Get_DS1307_RTC_Time();
+  26   1          printf("%d:%d:%d\n", (int)t[2], (int)t[1], (int)t[0]);
+  27   1      }
+*** WARNING C280 IN LINE 18 OF demo.c: 'rtc': unreferenced local variable
+  28          
+  29          void main()
+  30          {
+  31   1          dInit();
+  32   1          dLog("Initialized.\n");
+  33   1          InitI2C();
+  34   1          while (1) {
+  35   2              delay_1s();
+  36   2              read();
+  37   2          }
+  38   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    198    ----
+   CONSTANT SIZE    =     50    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      30
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
