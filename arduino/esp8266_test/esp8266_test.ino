@@ -42,6 +42,17 @@
  * 指令:AT+CIOBAUD=9600
  * 成功后请用新的波特率连入, 测试一下AT指令
  * 
+ * AT+CWSAP?
+ * +CWSAP:"esp8266","esp8266",6,0,4,0
+ * AT+CIFSR
+ * 
+ * +CIFSR:APIP,"192.168.4.1"
+ * +CIFSR:APMAC,"62:01:94:2a:0b:b7"
+ * +CIFSR:STAIP"..4
+ * FSA61:07
+ * 
+ * AT+CIPSTATUS
+ * AT+CWLAP
  */
 #include <SoftwareSerial.h>
 
@@ -54,7 +65,9 @@ String _comdata_wifi = "";             //for incoming wifi serial data
 void setup() {
   Serial.begin(9600);
   wifi.begin(9600); 
-  Serial.println("system is ready!");
+  Serial.println("System is Ready!");
+  delay(200);
+  wifi.println("AT+CIFSR");
 }
 
 void loop() {
