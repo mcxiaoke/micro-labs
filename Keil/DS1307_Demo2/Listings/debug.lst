@@ -1,10 +1,10 @@
-C51 COMPILER V9.56.0.0   DEBUG                                                             07/23/2017 18:39:40 PAGE 1   
+C51 COMPILER V9.56.0.0   DEBUG                                                             07/25/2017 16:37:04 PAGE 1   
 
 
 C51 COMPILER V9.56.0.0, COMPILATION OF MODULE DEBUG
 OBJECT MODULE PLACED IN .\Objects\debug.obj
 COMPILER INVOKED BY: C:\Keil\ARM\C51\BIN\C51.EXE debug.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\de
-                    -bug.lst) TABS(2) OBJECT(.\Objects\debug.obj)
+                    -bug.lst) OBJECT(.\Objects\debug.obj)
 
 line level    source
 
@@ -62,7 +62,7 @@ line level    source
   52   3                  ptr_string[len] = ch; //copy the char into string and increment the index
   53   3                  len++;
   54   3              }
-C51 COMPILER V9.56.0.0   DEBUG                                                             07/23/2017 18:39:40 PAGE 2   
+C51 COMPILER V9.56.0.0   DEBUG                                                             07/25/2017 16:37:04 PAGE 2   
 
   55   2          }
   56   1          return len;

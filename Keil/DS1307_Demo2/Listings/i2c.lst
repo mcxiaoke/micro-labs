@@ -1,4 +1,4 @@
-C51 COMPILER V9.56.0.0   I2C                                                               07/23/2017 18:39:40 PAGE 1   
+C51 COMPILER V9.56.0.0   I2C                                                               07/25/2017 15:37:28 PAGE 1   
 
 
 C51 COMPILER V9.56.0.0, COMPILATION OF MODULE I2C
@@ -62,7 +62,7 @@ line level    source
   52          {
   53   1        Set_SCK_Low;        // Make SCK pin low
   54   1      
-C51 COMPILER V9.56.0.0   I2C                                                               07/23/2017 18:39:40 PAGE 2   
+C51 COMPILER V9.56.0.0   I2C                                                               07/25/2017 15:37:28 PAGE 2   
 
   55   1        __delay_us(HalfBitDelay/2); // Data pin should change it's value,
   56   1                      // when it is confirm that SCK is low
@@ -126,7 +126,7 @@ line level    source
  114   2          }
  115   1          
  116   1        // Get ACK from slave
-C51 COMPILER V9.56.0.0   I2C                                                               07/23/2017 18:39:40 PAGE 3   
+C51 COMPILER V9.56.0.0   I2C                                                               07/25/2017 15:37:28 PAGE 3   
 
  117   1        Set_SCK_Low;
  118   1          Set_SDA_High;

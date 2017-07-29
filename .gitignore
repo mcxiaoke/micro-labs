@@ -6,5 +6,6 @@
 *.obj
 *.hex
 *.miu
+.DS_Store
 Objects/
 Backup Of *
