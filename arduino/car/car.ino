@@ -1,6 +1,6 @@
 #include <IRremote.h>
 #include <IRremoteInt.h>
-
+#include <SoftwareSerial.h>
 
 // IRemote definations
 // button 2, go forward
@@ -37,6 +37,42 @@
 
 // button ch, reset and stop
 #define IR_RESET 0x00FF629D
+
+// ble definations
+// button 2, go forward
+#define BLE_UP "2"
+// button 4, go left
+#define BLE_LEFT "4"
+// button 6, go right
+#define BLE_RIGHT "6"
+// button 8, go backward
+#define BLE_DOWN "8"
+
+// button 1, turn small left
+#define BLE_SLEFT "1"
+// button 3, turn small right
+#define BLE_SRIGHT "3"
+// button 7, next turn left
+#define BLE_NEXT_LEFT "7"
+// button 9, nextturn right
+#define BLE_NEXT_RIGHT "9"
+
+// button +, speed up 20
+#define BLE_SPEED_INC "A"
+// button -, speed down 20
+#define BLE_SPEED_DEC "B"
+// button eq, speed toggle
+#define BLE_SPEED_TOGGLE "*"
+
+// button 0, stop
+#define BLE_SWITCH_A "0"
+// button 5, stop
+#define BLE_SWITCH_B "5"
+// button pause, toggle distance
+#define BLE_DISTANCE "*"
+
+// button ch, reset and stop
+#define BLE_RESET "*"
 
 typedef enum {
   GO_UP,
@@ -80,20 +116,26 @@ const byte RECV_PIN = 12;
 const byte TRIG_PIN = A4; // trigger pin
 const byte ECHO_PIN = A5; // echo pin
 
+// Bluetooth const
+const byte BLE_TX = 8;
+const byte BLE_RX = 11;
+
 // Car const
 const byte TURN_DURATION = 1500;
-const byte MOVE_DURATION = 500;
+const byte MOVE_DURATION = 200;
 const byte TURN_SPEED = 180;
 const int SPEED_HIGH = 240;
-const int SPEED_LOW = 180;
+const int SPEED_LOW = 200;
 const int INIT_SPEED = SPEED_LOW;
 const Command INIT_COMMAND = STOP;
 
-float maxDistance = 15.0;
+float maxDistance = 20.0;
 bool nextLeft = true;
 int currentSpeed = INIT_SPEED;
 Command nextCommand = INIT_COMMAND;
 
+String bleStr = "";
+SoftwareSerial ble(BLE_RX, BLE_TX);   //RX, TX
 IRrecv irrecv(RECV_PIN);
 decode_results results;
 
@@ -116,6 +158,7 @@ void setup() {
   setSpeed(currentSpeed);
   Serial.begin(9600);
   irrecv.enableIRIn(); // Start the receiver
+  ble.begin(9600);
 }
 
 void setSpeed(int speed) {
@@ -233,7 +276,7 @@ void down(int duration) {
 
 void left(int duration) {
   wait();
-  delay(MOVE_DURATION / 2);
+  delay(MOVE_DURATION);
   setSpeed(TURN_SPEED);
   moveUp(FRONT_RIGHT);
   moveUp(BACK_RIGHT);
@@ -241,7 +284,7 @@ void left(int duration) {
   moveDown(BACK_LEFT);
   delay(duration);
   wait();
-  delay(MOVE_DURATION / 2);
+  delay(MOVE_DURATION);
   setSpeed(currentSpeed);
 }
 
@@ -251,7 +294,7 @@ void leftBack() {
 
 void right(int duration) {
   wait();
-  delay(MOVE_DURATION / 2);
+  delay(MOVE_DURATION);
   setSpeed(TURN_SPEED);
   moveUp(FRONT_LEFT);
   moveUp(BACK_LEFT);
@@ -259,7 +302,7 @@ void right(int duration) {
   moveDown(BACK_RIGHT);
   delay(duration);
   wait();
-  delay(MOVE_DURATION / 2);
+  delay(MOVE_DURATION);
   setSpeed(currentSpeed);
 }
 
@@ -289,7 +332,7 @@ void parseCommand() {
     } else if (results.value == IR_SPEED_INC) {
       currentSpeed = min(240, currentSpeed + 20);
     } else if (results.value == IR_SPEED_DEC) {
-      currentSpeed = max(120, currentSpeed - 20);
+      currentSpeed = max(140, currentSpeed - 20);
     } else if (results.value == IR_SPEED_TOGGLE) {
       if (currentSpeed >= SPEED_HIGH) {
         currentSpeed = SPEED_LOW;
@@ -301,10 +344,10 @@ void parseCommand() {
     } else if (results.value == IR_SWITCH_B) {
       nextCommand = STOP;
     }  else if (results.value == IR_DISTANCE) {
-      if (maxDistance < 20.0) {
-        maxDistance = 25.0;
+      if (maxDistance < 25.0) {
+        maxDistance = 30.0;
       } else {
-        maxDistance = 15.0;
+        maxDistance = 20.0;
       }
     } else if (results.value == IR_RESET) {
       reset();
@@ -315,17 +358,74 @@ void parseCommand() {
   }
 }
 
+void readBleData() {
+  while (ble.available() > 0) {
+    bleStr += char(ble.read());   //get serial data
+    delay(1);
+  }
+}
+
+void parseBleCommand() {
+  readBleData();
+  if (bleStr == "") {
+    return;
+  }
+  Serial.print("Ble Command: ");
+  Serial.println(bleStr);
+  if (bleStr == BLE_UP) {
+    nextCommand = GO_UP;
+  } else if (bleStr == BLE_LEFT) {
+    nextCommand = GO_LEFT;
+  } else if (bleStr == BLE_RIGHT) {
+    nextCommand = GO_RIGHT;
+  } else if (bleStr == BLE_DOWN) {
+    nextCommand = GO_DOWN;
+  } else if (bleStr == BLE_SLEFT) {
+    nextCommand = GO_SLEFT;
+  } else if (bleStr == BLE_SRIGHT) {
+    nextCommand = GO_SRIGHT;
+  } else if (bleStr == BLE_NEXT_LEFT) {
+    nextLeft = true;
+  } else if (bleStr == BLE_NEXT_RIGHT) {
+    nextLeft = false;
+  } else if (bleStr == BLE_SPEED_INC) {
+    currentSpeed = min(240, currentSpeed + 20);
+  } else if (bleStr == BLE_SPEED_DEC) {
+    currentSpeed = max(140, currentSpeed - 20);
+  } else if (bleStr == BLE_SPEED_TOGGLE) {
+    if (currentSpeed >= SPEED_HIGH) {
+      currentSpeed = SPEED_LOW;
+    } else {
+      currentSpeed = SPEED_HIGH;
+    }
+  } else if (bleStr == BLE_SWITCH_A) {
+    nextCommand = STOP;
+  } else if (bleStr == BLE_SWITCH_B) {
+    nextCommand = STOP;
+  }  else if (bleStr == BLE_DISTANCE) {
+    if (maxDistance < 25.0) {
+      maxDistance = 30.0;
+    } else {
+      maxDistance = 20.0;
+    }
+  } else if (bleStr == BLE_RESET) {
+    reset();
+    nextCommand = STOP;
+  }
+  bleStr = "";
+}
+
 void executeCommand() {
   switch (nextCommand) {
     case GO_UP:
       up(MOVE_DURATION);
       break;
     case GO_LEFT:
-      left(MOVE_DURATION);
+      left(TURN_DURATION / 2);
       nextCommand = GO_UP;
       break;
     case GO_RIGHT:
-      right(MOVE_DURATION);
+      right(TURN_DURATION / 2);
       nextCommand = GO_UP;
       break;
     case GO_DOWN:
@@ -386,13 +486,11 @@ void checkBarrier() {
     } else {
       right(TURN_DURATION);
     }
-  } else {
-    delay(100);
   }
 }
 
 void loop() {
-  parseCommand();
+  parseBleCommand();
   executeCommand();
   checkBarrier();
 }
