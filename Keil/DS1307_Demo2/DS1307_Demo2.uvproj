@@ -370,19 +370,9 @@
               <FilePath>.\STARTUP.A51</FilePath>
             </File>
             <File>
-              <FileName>ds1307.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\ds1307.c</FilePath>
-            </File>
-            <File>
               <FileName>debug.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\debug.c</FilePath>
-            </File>
-            <File>
-              <FileName>i2c.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\i2c.c</FilePath>
             </File>
             <File>
               <FileName>demo.c</FileName>
