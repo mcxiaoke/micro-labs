@@ -64,15 +64,12 @@
 // button eq, speed toggle
 #define BLE_SPEED_TOGGLE "*"
 
-// button 0, stop
-#define BLE_SWITCH_A "0"
 // button 5, stop
-#define BLE_SWITCH_B "5"
+#define BLE_STOP "5"
 // button pause, toggle distance
 #define BLE_DISTANCE "*"
-
-// button ch, reset and stop
-#define BLE_RESET "*"
+// button 0, reset and stop
+#define BLE_RESET "0"
 
 typedef enum {
   GO_UP,
@@ -159,6 +156,7 @@ void setup() {
   Serial.begin(9600);
   irrecv.enableIRIn(); // Start the receiver
   ble.begin(9600);
+  ble.println("AT+NAME");
 }
 
 void setSpeed(int speed) {
@@ -218,6 +216,9 @@ void demo() {
 }
 
 void reset() {
+  bleStr = "";
+  maxDistance = 20.0;
+  nextLeft = true;
   currentSpeed = INIT_SPEED;
   nextCommand = STOP;
 }
@@ -398,11 +399,9 @@ void parseBleCommand() {
     } else {
       currentSpeed = SPEED_HIGH;
     }
-  } else if (bleStr == BLE_SWITCH_A) {
+  } else if (bleStr == BLE_STOP) {
     nextCommand = STOP;
-  } else if (bleStr == BLE_SWITCH_B) {
-    nextCommand = STOP;
-  }  else if (bleStr == BLE_DISTANCE) {
+  } else if (bleStr == BLE_DISTANCE) {
     if (maxDistance < 25.0) {
       maxDistance = 30.0;
     } else {
