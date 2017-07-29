@@ -8,14 +8,14 @@
 #define ulong unsigned long
 
 uchar num;
-ulong count = 65535;
+ulong count = 123456789;
    
 void get_digits(unsigned long num, unsigned char* digits)
 {
     uchar index = 0;
     uchar i = 0;
     while(num > 0){
-        i = num % 10;
+        i = (uchar)(num % 10);
         num /= 10;
         digits[index++] = i;  
     }
@@ -39,18 +39,15 @@ void init()
 
 void update_led2()
 {
-    ulong tmp;
-    uchar digits[8] = {0};
-    
+    ulong tmp = count;
+    // 32bit num max 10 digits
+    uchar digits[10];
     uchar i;
-    if(count >= 100000000){
-        tmp = count % 100000000;
-    }else{
-        tmp = count;
-    }
     get_digits(tmp, digits);
-    for(i = 7;i>=0;i--){
-        Write_DATA(i<<1, tab[digits[i]]);
+    // 8 digital led
+    for(i = 0;i<8;i++){
+        // right->left, d1-d8
+        Write_DATA((7-i)<<1, tab[digits[i]]);
     }
 }
 
@@ -88,7 +85,7 @@ void main()
         {
             num = 0;
             count--;
-            update_led();
+            update_led2();
         }
     }
 }
