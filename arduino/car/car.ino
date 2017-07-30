@@ -58,16 +58,21 @@
 #define BLE_NEXT_RIGHT "9"
 
 // button +, speed up 20
-#define BLE_SPEED_INC "A"
+#define BLE_SPEED_INC "_"
 // button -, speed down 20
-#define BLE_SPEED_DEC "B"
+#define BLE_SPEED_DEC "_"
 // button eq, speed toggle
-#define BLE_SPEED_TOGGLE "*"
+#define BLE_SPEED_TOGGLE "_"
+
+// button A, auto mode
+#define BLE_AUTO_MODE "10"
+// button M, manual mode
+#define BLE_MANUAL_MODE "11"
 
 // button 5, stop
 #define BLE_STOP "5"
 // button pause, toggle distance
-#define BLE_DISTANCE "*"
+#define BLE_DISTANCE "_"
 // button 0, reset and stop
 #define BLE_RESET "0"
 
@@ -128,6 +133,7 @@ const Command INIT_COMMAND = STOP;
 
 float maxDistance = 20.0;
 bool nextLeft = true;
+bool autoMode = false;
 int currentSpeed = INIT_SPEED;
 Command nextCommand = INIT_COMMAND;
 
@@ -215,9 +221,18 @@ void demo() {
   wait();
 }
 
+void toggleState() {
+  if (nextCommand = STOP) {
+    nextCommand = GO_UP;
+  } else {
+    nextCommand = STOP;
+  }
+}
+
 void reset() {
   bleStr = "";
   maxDistance = 20.0;
+  autoMode = false;
   nextLeft = true;
   currentSpeed = INIT_SPEED;
   nextCommand = STOP;
@@ -341,14 +356,14 @@ void parseCommand() {
         currentSpeed = SPEED_HIGH;
       }
     } else if (results.value == IR_SWITCH_A) {
-      nextCommand = STOP;
+      toggleState();
     } else if (results.value == IR_SWITCH_B) {
-      nextCommand = STOP;
+      toggleState();
     }  else if (results.value == IR_DISTANCE) {
-      if (maxDistance < 25.0) {
-        maxDistance = 30.0;
-      } else {
+      if (maxDistance < 15.0) {
         maxDistance = 20.0;
+      } else {
+        maxDistance = 10.0;
       }
     } else if (results.value == IR_RESET) {
       reset();
@@ -389,6 +404,10 @@ void parseBleCommand() {
     nextLeft = true;
   } else if (bleStr == BLE_NEXT_RIGHT) {
     nextLeft = false;
+  } else if (bleStr == BLE_AUTO_MODE) {
+    autoMode = true;
+  } else if (bleStr == BLE_MANUAL_MODE) {
+    autoMode = false;
   } else if (bleStr == BLE_SPEED_INC) {
     currentSpeed = min(240, currentSpeed + 20);
   } else if (bleStr == BLE_SPEED_DEC) {
@@ -400,12 +419,12 @@ void parseBleCommand() {
       currentSpeed = SPEED_HIGH;
     }
   } else if (bleStr == BLE_STOP) {
-    nextCommand = STOP;
+    toggleState();
   } else if (bleStr == BLE_DISTANCE) {
-    if (maxDistance < 25.0) {
-      maxDistance = 30.0;
-    } else {
+    if (maxDistance < 15.0) {
       maxDistance = 20.0;
+    } else {
+      maxDistance = 10.0;
     }
   } else if (bleStr == BLE_RESET) {
     reset();
@@ -420,15 +439,16 @@ void executeCommand() {
       up(MOVE_DURATION);
       break;
     case GO_LEFT:
-      left(TURN_DURATION / 2);
+      left(TURN_DURATION);
       nextCommand = GO_UP;
       break;
     case GO_RIGHT:
-      right(TURN_DURATION / 2);
+      right(TURN_DURATION);
       nextCommand = GO_UP;
       break;
     case GO_DOWN:
-      down(MOVE_DURATION);
+      down(TURN_DURATION);
+      nextCommand = STOP;
       break;
     case GO_SLEFT:
       left(TURN_DURATION / 2);
@@ -477,14 +497,21 @@ void checkBarrier() {
   }
   float distance = getDistance();
   if (distance <= maxDistance) {
-    wait();
-    delay(MOVE_DURATION);
-    down(MOVE_DURATION);
-    if (nextLeft) {
-      left(TURN_DURATION);
+    if (autoMode) {
+      wait();
+      delay(MOVE_DURATION);
+      down(MOVE_DURATION);
+      if (nextLeft) {
+        left(TURN_DURATION);
+      } else {
+        right(TURN_DURATION);
+      }
     } else {
-      right(TURN_DURATION);
+      wait();
+      delay(MOVE_DURATION);
+      nextCommand = STOP;
     }
+
   }
 }
 
