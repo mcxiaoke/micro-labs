@@ -1,0 +1,398 @@
+BL51 BANKED LINKER/LOCATER V6.22                                                        07/30/2017  17:42:23  PAGE 1
+
+
+BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
+C:\KEIL\ARM\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, .\Objects\tm1637.obj TO .\Objects\LEDx4_TM1637 P
+>> RINT (.\Listings\LEDx4_TM1637.m51) RAMSIZE (256)
+
+
+MEMORY MODEL: SMALL
+
+
+INPUT MODULES INCLUDED:
+  .\Objects\STARTUP.obj (?C_STARTUP)
+  .\Objects\main.obj (MAIN)
+  .\Objects\tm1637.obj (TM1637)
+  C:\KEIL\ARM\C51\LIB\C51S.LIB (?C_INIT)
+  C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?IMUL)
+  C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?UIDIV)
+
+
+LINK MAP OF MODULE:  .\Objects\LEDx4_TM1637 (?C_STARTUP)
+
+
+            TYPE    BASE      LENGTH    RELOCATION   SEGMENT NAME
+            -----------------------------------------------------
+
+            * * * * * * *   D A T A   M E M O R Y   * * * * * * *
+            REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
+            DATA    0008H     000AH     UNIT         _DATA_GROUP_
+            DATA    0012H     0005H     UNIT         ?DT?MAIN
+            IDATA   0017H     0001H     UNIT         ?STACK
+
+            * * * * * * *   C O D E   M E M O R Y   * * * * * * *
+            CODE    0000H     0003H     ABSOLUTE     
+                    0003H     0008H                  *** GAP ***
+            CODE    000BH     0003H     ABSOLUTE     
+            CODE    000EH     00A0H     UNIT         ?PR?TIME_DISPLAY?MAIN
+            CODE    00AEH     008CH     UNIT         ?C_C51STARTUP
+            CODE    013AH     0067H     UNIT         ?C?LIB_CODE
+            CODE    01A1H     004DH     UNIT         ?PR?MAIN?MAIN
+            CODE    01EEH     002AH     UNIT         ?CO?TM1637
+            CODE    0218H     0028H     UNIT         ?PR?_TM1637_WRITE1BYTE?TM1637
+            CODE    0240H     001AH     UNIT         ?PR?_DELAY_US?TM1637
+            CODE    025AH     0018H     UNIT         ?PR?_DELAY_MS?TM1637
+            CODE    0272H     0017H     UNIT         ?PR?_TM1637_WRITE1BIT?TM1637
+            CODE    0289H     0014H     UNIT         ?PR?_TIME_SET?MAIN
+            CODE    029DH     0014H     UNIT         ?PR?_TM1637_WRITEDATA?TM1637
+            CODE    02B1H     0013H     UNIT         ?PR?TIMER0_ISR?MAIN
+            CODE    02C4H     0010H     UNIT         ?PR?TIMER0_INIT?MAIN
+            CODE    02D4H     0010H     UNIT         ?PR?TM1637_START?TM1637
+            CODE    02E4H     0010H     UNIT         ?PR?TM1637_STOP?TM1637
+            CODE    02F4H     000EH     UNIT         ?PR?TM1637_ASK?TM1637
+            CODE    0302H     000DH     UNIT         ?PR?_TM1637_WRITECOMMAND?TM1637
+            CODE    030FH     000CH     UNIT         ?C_INITSEG
+            CODE    031BH     000BH     UNIT         ?PR?TM1637_INIT?TM1637
+
+
+
+OVERLAY MAP OF MODULE:   .\Objects\LEDx4_TM1637 (?C_STARTUP)
+
+
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 2
+
+
+SEGMENT                                   DATA_GROUP 
+  +--> CALLED SEGMENT                   START    LENGTH
+-------------------------------------------------------
+?C_C51STARTUP                           -----    -----
+  +--> ?PR?MAIN?MAIN
+  +--> ?C_INITSEG
+
+?PR?MAIN?MAIN                           -----    -----
+  +--> ?PR?TIMER0_INIT?MAIN
+  +--> ?PR?_TIME_SET?MAIN
+  +--> ?PR?TM1637_INIT?TM1637
+  +--> ?PR?TIME_DISPLAY?MAIN
+  +--> ?PR?_DELAY_MS?TM1637
+
+?PR?TM1637_INIT?TM1637                  -----    -----
+  +--> ?PR?TM1637_START?TM1637
+  +--> ?PR?_TM1637_WRITECOMMAND?TM1637
+  +--> ?PR?TM1637_STOP?TM1637
+
+?PR?TM1637_START?TM1637                 -----    -----
+  +--> ?PR?_DELAY_US?TM1637
+
+?PR?_TM1637_WRITECOMMAND?TM1637         000EH    0001H
+  +--> ?PR?TM1637_START?TM1637
+  +--> ?PR?_TM1637_WRITE1BYTE?TM1637
+  +--> ?PR?TM1637_STOP?TM1637
+
+?PR?_TM1637_WRITE1BYTE?TM1637           0010H    0002H
+  +--> ?PR?_TM1637_WRITE1BIT?TM1637
+  +--> ?PR?TM1637_ASK?TM1637
+
+?PR?_TM1637_WRITE1BIT?TM1637            -----    -----
+  +--> ?PR?_DELAY_US?TM1637
+
+?PR?TM1637_ASK?TM1637                   -----    -----
+  +--> ?PR?_DELAY_US?TM1637
+
+?PR?TM1637_STOP?TM1637                  -----    -----
+  +--> ?PR?_DELAY_US?TM1637
+
+?PR?TIME_DISPLAY?MAIN                   0008H    0006H
+  +--> ?PR?TM1637_START?TM1637
+  +--> ?PR?_TM1637_WRITECOMMAND?TM1637
+  +--> ?CO?TM1637
+  +--> ?PR?_TM1637_WRITEDATA?TM1637
+  +--> ?PR?TM1637_STOP?TM1637
+
+?PR?_TM1637_WRITEDATA?TM1637            000EH    0002H
+  +--> ?PR?TM1637_START?TM1637
+  +--> ?PR?_TM1637_WRITE1BYTE?TM1637
+  +--> ?PR?TM1637_STOP?TM1637
+
+
+
+SYMBOL TABLE OF MODULE:  .\Objects\LEDx4_TM1637 (?C_STARTUP)
+
+  VALUE           TYPE          NAME
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 3
+
+
+  ----------------------------------
+
+  -------         MODULE        ?C_STARTUP
+  C:00AEH         SEGMENT       ?C_C51STARTUP
+  I:0017H         SEGMENT       ?STACK
+  C:0000H         PUBLIC        ?C_STARTUP
+  D:00E0H         SYMBOL        ACC
+  D:00F0H         SYMBOL        B
+  D:0083H         SYMBOL        DPH
+  D:0082H         SYMBOL        DPL
+  N:0000H         SYMBOL        IBPSTACK
+  N:0100H         SYMBOL        IBPSTACKTOP
+  N:0080H         SYMBOL        IDATALEN
+  C:00B1H         SYMBOL        IDATALOOP
+  N:0000H         SYMBOL        PBPSTACK
+  N:0100H         SYMBOL        PBPSTACKTOP
+  N:0000H         SYMBOL        PDATALEN
+  N:0000H         SYMBOL        PDATASTART
+  N:0000H         SYMBOL        PPAGE
+  N:0000H         SYMBOL        PPAGEENABLE
+  D:00A0H         SYMBOL        PPAGE_SFR
+  D:0081H         SYMBOL        SP
+  C:00AEH         SYMBOL        STARTUP1
+  N:0000H         SYMBOL        XBPSTACK
+  N:0000H         SYMBOL        XBPSTACKTOP
+  N:0000H         SYMBOL        XDATALEN
+  N:0000H         SYMBOL        XDATASTART
+  C:0000H         LINE#         126
+  C:00AEH         LINE#         133
+  C:00B0H         LINE#         134
+  C:00B1H         LINE#         135
+  C:00B2H         LINE#         136
+  C:00B4H         LINE#         185
+  C:00B7H         LINE#         196
+  -------         ENDMOD        ?C_STARTUP
+
+  -------         MODULE        MAIN
+  C:0000H         SYMBOL        _ICE_DUMMY_
+  D:00A0H         PUBLIC        P2
+  C:02B1H         PUBLIC        timer0_isr
+  B:00A8H.7       PUBLIC        EA
+  C:000EH         PUBLIC        time_display
+  C:01A1H         PUBLIC        main
+  D:0012H         PUBLIC        count
+  D:0089H         PUBLIC        TMOD
+  B:00A8H.1       PUBLIC        ET0
+  D:008CH         PUBLIC        TH0
+  D:008AH         PUBLIC        TL0
+  D:0014H         SYMBOL        dpFlag
+  B:0088H.4       PUBLIC        TR0
+  C:0289H         PUBLIC        _time_set
+  C:02C4H         PUBLIC        timer0_init
+  D:0015H         PUBLIC        seconds
+  -------         PROC          MAIN
+  C:01A1H         LINE#         17
+  C:01A1H         LINE#         18
+  C:01A1H         LINE#         19
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 4
+
+
+  C:01A4H         LINE#         20
+  C:01ADH         LINE#         21
+  C:01B0H         LINE#         22
+  C:01B0H         LINE#         23
+  C:01B0H         LINE#         24
+  C:01B3H         LINE#         25
+  C:01C6H         LINE#         26
+  C:01CEH         LINE#         27
+  C:01D2H         LINE#         28
+  C:01DDH         LINE#         29
+  C:01E5H         LINE#         30
+  C:01E5H         LINE#         31
+  C:01E5H         LINE#         32
+  C:01ECH         LINE#         33
+  -------         ENDPROC       MAIN
+  -------         PROC          _TIME_SET
+  D:0006H         SYMBOL        min
+  D:0002H         SYMBOL        sec
+  C:0289H         LINE#         36
+  C:028DH         LINE#         37
+  C:028DH         LINE#         38
+  C:029CH         LINE#         39
+  -------         ENDPROC       _TIME_SET
+  -------         PROC          TIME_DISPLAY
+  -------         DO            
+  D:0008H         SYMBOL        min
+  D:0002H         SYMBOL        sec
+  D:000AH         SYMBOL        mh
+  D:000BH         SYMBOL        ml
+  D:000CH         SYMBOL        sh
+  D:000DH         SYMBOL        sl
+  -------         ENDDO         
+  C:000EH         LINE#         47
+  C:000EH         LINE#         48
+  C:000EH         LINE#         52
+  C:001DH         LINE#         53
+  C:002CH         LINE#         54
+  C:0039H         LINE#         55
+  C:0046H         LINE#         56
+  C:0053H         LINE#         57
+  C:0060H         LINE#         59
+  C:0063H         LINE#         60
+  C:0068H         LINE#         61
+  C:0074H         LINE#         63
+  C:0093H         LINE#         64
+  C:009FH         LINE#         65
+  C:00ABH         LINE#         66
+  -------         ENDPROC       TIME_DISPLAY
+  -------         PROC          TIMER0_INIT
+  C:02C4H         LINE#         75
+  C:02C4H         LINE#         76
+  C:02C4H         LINE#         77
+  C:02C7H         LINE#         78
+  C:02CAH         LINE#         79
+  C:02CDH         LINE#         80
+  C:02CFH         LINE#         81
+  C:02D1H         LINE#         82
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 5
+
+
+  C:02D3H         LINE#         83
+  -------         ENDPROC       TIMER0_INIT
+  -------         PROC          TIMER0_ISR
+  C:02B1H         LINE#         92
+  C:02B3H         LINE#         94
+  C:02B6H         LINE#         95
+  C:02B9H         LINE#         96
+  C:02C1H         LINE#         97
+  -------         ENDPROC       TIMER0_ISR
+  -------         ENDMOD        MAIN
+
+  -------         MODULE        TM1637
+  C:0000H         SYMBOL        _ICE_DUMMY_
+  C:029DH         PUBLIC        _TM1637_writeData
+  D:00A0H         PUBLIC        P2
+  C:02D4H         PUBLIC        TM1637_start
+  C:031BH         PUBLIC        TM1637_init
+  C:02F4H         PUBLIC        TM1637_ask
+  C:02E4H         PUBLIC        TM1637_stop
+  C:020EH         PUBLIC        CATHODE_DOT
+  C:0302H         PUBLIC        _TM1637_writeCommand
+  C:0218H         PUBLIC        _TM1637_write1Byte
+  C:025AH         PUBLIC        _delay_ms
+  C:0272H         PUBLIC        _TM1637_write1Bit
+  B:00A0H.0       PUBLIC        CLK
+  C:0246H         PUBLIC        _delay_us
+  B:00A0H.1       PUBLIC        DIO
+  C:01EEH         PUBLIC        ANODE
+  C:01FEH         PUBLIC        CATHODE
+  -------         PROC          TM1637_INIT
+  C:031BH         LINE#         32
+  C:031BH         LINE#         33
+  C:031BH         LINE#         34
+  C:031EH         LINE#         36
+  C:0323H         LINE#         37
+  -------         ENDPROC       TM1637_INIT
+  -------         PROC          TM1637_START
+  C:02D4H         LINE#         47
+  C:02D4H         LINE#         48
+  C:02D4H         LINE#         49
+  C:02D6H         LINE#         50
+  C:02D8H         LINE#         51
+  C:02DBH         LINE#         52
+  C:02DDH         LINE#         53
+  -------         ENDPROC       TM1637_START
+  -------         PROC          TM1637_STOP
+  C:02E4H         LINE#         64
+  C:02E4H         LINE#         65
+  C:02E4H         LINE#         66
+  C:02E4H         LINE#         67
+  C:02E7H         LINE#         68
+  C:02E9H         LINE#         69
+  C:02ECH         LINE#         70
+  C:02EEH         LINE#         71
+  C:02F1H         LINE#         72
+  C:02F3H         LINE#         74
+  -------         ENDPROC       TM1637_STOP
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 6
+
+
+  -------         PROC          TM1637_ASK
+  C:02F4H         LINE#         79
+  C:02F4H         LINE#         80
+  C:02F4H         LINE#         81
+  C:02F4H         LINE#         82
+  C:02F7H         LINE#         83
+  C:02FAH         LINE#         84
+  C:02FCH         LINE#         85
+  C:02FFH         LINE#         86
+  C:0301H         LINE#         87
+  -------         ENDPROC       TM1637_ASK
+  -------         PROC          _TM1637_WRITE1BIT
+  D:0007H         SYMBOL        mBit
+  C:0272H         LINE#         95
+  C:0272H         LINE#         96
+  C:0272H         LINE#         97
+  C:0274H         LINE#         99
+  C:0277H         LINE#         100
+  C:027BH         LINE#         102
+  C:027DH         LINE#         103
+  C:0280H         LINE#         104
+  C:0282H         LINE#         105
+  -------         ENDPROC       _TM1637_WRITE1BIT
+  -------         PROC          _TM1637_WRITE1BYTE
+  D:0010H         SYMBOL        mByte
+  -------         DO            
+  D:0011H         SYMBOL        loop
+  -------         ENDDO         
+  C:0218H         LINE#         114
+  C:021AH         LINE#         115
+  C:021AH         LINE#         116
+  C:021DH         LINE#         117
+  C:021FH         LINE#         118
+  C:021FH         LINE#         119
+  C:0232H         LINE#         120
+  C:023DH         LINE#         121
+  -------         ENDPROC       _TM1637_WRITE1BYTE
+  -------         PROC          _TM1637_WRITECOMMAND
+  D:000EH         SYMBOL        mData
+  C:0302H         LINE#         130
+  C:0304H         LINE#         131
+  C:0304H         LINE#         132
+  C:0307H         LINE#         133
+  C:030CH         LINE#         134
+  -------         ENDPROC       _TM1637_WRITECOMMAND
+  -------         PROC          _TM1637_WRITEDATA
+  D:000EH         SYMBOL        addr
+  D:000FH         SYMBOL        mData
+  C:029DH         LINE#         143
+  C:02A1H         LINE#         144
+  C:02A1H         LINE#         145
+  C:02A4H         LINE#         146
+  C:02A9H         LINE#         147
+  C:02AEH         LINE#         148
+  -------         ENDPROC       _TM1637_WRITEDATA
+  C:0242H         SYMBOL        L?0031
+  -------         PROC          L?0030
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/30/2017  17:42:23  PAGE 7
+
+
+  -------         ENDPROC       L?0030
+  C:0242H         SYMBOL        L?0031
+  -------         PROC          _DELAY_US
+  D:0006H         SYMBOL        i
+  C:0246H         LINE#         157
+  C:0246H         LINE#         158
+  C:0246H         LINE#         159
+  C:0251H         LINE#         160
+  C:0259H         LINE#         161
+  -------         ENDPROC       _DELAY_US
+  -------         PROC          _DELAY_MS
+  D:0006H         SYMBOL        i
+  -------         DO            
+  D:0004H         SYMBOL        x
+  D:0005H         SYMBOL        j
+  -------         ENDDO         
+  C:025AH         LINE#         169
+  C:025AH         LINE#         170
+  C:025AH         LINE#         172
+  C:0268H         LINE#         173
+  C:0271H         LINE#         174
+  -------         ENDPROC       _DELAY_MS
+  -------         ENDMOD        TM1637
+
+  -------         MODULE        ?C?IMUL
+  C:013AH         PUBLIC        ?C?IMUL
+  -------         ENDMOD        ?C?IMUL
+
+  -------         MODULE        ?C?UIDIV
+  C:014CH         PUBLIC        ?C?UIDIV
+  -------         ENDMOD        ?C?UIDIV
+
+Program Size: data=24.0 xdata=0 code=798
+LINK/LOCATE RUN COMPLETE.  0 WARNING(S),  0 ERROR(S)
