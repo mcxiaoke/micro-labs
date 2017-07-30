@@ -86,6 +86,33 @@ void TM1637_ask( void )
     CLK = 0;
 }
 
+/**
+ display 4 numbers, left to right
+**/
+void TM1638_display_numbers(unsigned char* numbers, unsigned char length)
+{
+    unsigned char i;
+    unsigned char addr = 0xc0;
+    TM1637_start();
+    TM1637_writeCommand(0x44);
+    for(i=0;i< length;i++){
+        TM1637_writeData(addr+i, CATHODE[numbers[i]]);
+    }
+    TM1637_stop();
+}
+
+void TM1638_display_symbols(unsigned char* symbols, int length)
+{
+    unsigned char i;
+    unsigned char addr = 0xc0;
+    TM1637_start();
+    TM1637_writeCommand(0x44);
+    for(i=0;i< length;i++){
+        TM1637_writeData(addr+i, symbols[i]);
+    }
+    TM1637_stop();
+}
+
 /********************************************************************
 * 名称 : void TM1637_write1Bit(unsigned char mBit )
 * 功能 : 写1bit

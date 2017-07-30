@@ -18,6 +18,8 @@ void TM1637_init( void );
 void TM1637_start( void );
 void TM1637_stop( void );
 void TM1637_ask( void );
+void TM1638_display_numbers(unsigned char* numbers, int length);
+void TM1638_display_symbols(unsigned char* symbols, int length);
 void TM1637_write1Bit(unsigned char mBit);
 void TM1637_write1Byte(unsigned char mByte);
 void TM1637_writeCommand(unsigned char mData);

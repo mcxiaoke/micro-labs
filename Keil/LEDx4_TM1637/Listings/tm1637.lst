@@ -1,4 +1,4 @@
-C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 17:42:23 PAGE 1   
+C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 20:25:10 PAGE 1   
 
 
 C51 COMPILER V9.56.0.0, COMPILATION OF MODULE TM1637
@@ -62,7 +62,7 @@ line level    source
   51   1          delay_us(4);
   52   1          DIO = 0;
   53   1          delay_us(4);
-C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 17:42:23 PAGE 2   
+C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 20:25:10 PAGE 2   
 
   54   1          //CLK = 0;
   55   1          //delay_us(4);
@@ -99,107 +99,135 @@ line level    source
   86   1          CLK = 0;
   87   1      }
   88          
-  89          /********************************************************************
-  90          * 名称 : void TM1637_write1Bit(unsigned char mBit )
-  91          * 功能 : 写1bit
-  92          * 输入 : unsigned char mBit
-  93          * 输出 : 无
-  94          **************************************************************/
-  95          void TM1637_write1Bit(unsigned char mBit )
-  96          {
-  97   1          CLK = 0;
-  98   1          //delay_us(4);
-  99   1          if(mBit)
- 100   1              DIO = 1;
- 101   1          else
- 102   1              DIO = 0;
- 103   1          delay_us(4);
- 104   1          CLK = 1;
- 105   1          delay_us(4);
- 106   1      }
- 107          
- 108          /********************************************************************
- 109          * 名称 : void TM1637_write1Byte(unsigned char mByte)
- 110          * 功能 : 写1byte
- 111          * 输入 : unsigned char mByte
- 112          * 输出 : 无
- 113          **************************************************************/
- 114          void TM1637_write1Byte(unsigned char mByte)
- 115          {
-C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 17:42:23 PAGE 3   
+  89          /**
+  90           display 4 numbers, left to right
+  91          **/
+  92          void TM1638_display_numbers(unsigned char* numbers, unsigned char length)
+  93          {
+*** WARNING C235 IN LINE 93 OF tm1637.c: parameter 2: different types
+  94   1          unsigned char i;
+  95   1          unsigned char addr = 0xc0;
+  96   1          TM1637_start();
+  97   1          TM1637_writeCommand(0x44);
+  98   1          for(i=0;i< length;i++){
+  99   2              TM1637_writeData(addr+i, CATHODE[numbers[i]]);
+ 100   2          }
+ 101   1          TM1637_stop();
+ 102   1      }
+ 103          
+ 104          void TM1638_display_symbols(unsigned char* symbols, int length)
+ 105          {
+ 106   1          unsigned char i;
+ 107   1          unsigned char addr = 0xc0;
+ 108   1          TM1637_start();
+ 109   1          TM1637_writeCommand(0x44);
+ 110   1          for(i=0;i< length;i++){
+ 111   2              TM1637_writeData(addr+i, symbols[i]);
+ 112   2          }
+ 113   1          TM1637_stop();
+ 114   1      }
+C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 20:25:10 PAGE 3   
 
- 116   1          char loop = 0;
- 117   1          for(loop = 0; loop < 8; loop++)
- 118   1          {
- 119   2              TM1637_write1Bit((mByte>>loop)&0x01); //取得最低位
- 120   2          }
- 121   1          TM1637_ask();
- 122   1      }
- 123          
- 124          /********************************************************************
- 125          * 名称 : void TM1637_writeCammand(unsigned char mData)
- 126          * 功能 : 写指令1byte
- 127          * 输入 : unsigned char mData
- 128          * 输出 : 无
- 129          **************************************************************/
- 130          void TM1637_writeCommand(unsigned char mData)
- 131          {
- 132   1          TM1637_start();
- 133   1          TM1637_write1Byte(mData);  //数据
- 134   1          TM1637_stop();
- 135   1      }
- 136          
- 137          /********************************************************************
- 138          * 名称 : void TM1637_writeData(unsigned char addr, unsigned char mData)
- 139          * 功能 : 固定地址写数据1byte
- 140          * 输入 : unsigned char addr, unsigned char mData
- 141          * 输出 : 无
- 142          **************************************************************/
- 143          void TM1637_writeData(unsigned char addr, unsigned char mData)
- 144          {
- 145   1          TM1637_start();
- 146   1          TM1637_write1Byte(addr);  //地址
- 147   1          TM1637_write1Byte(mData);  //数据
- 148   1          TM1637_stop();
+ 115          
+ 116          /********************************************************************
+ 117          * 名称 : void TM1637_write1Bit(unsigned char mBit )
+ 118          * 功能 : 写1bit
+ 119          * 输入 : unsigned char mBit
+ 120          * 输出 : 无
+ 121          **************************************************************/
+ 122          void TM1637_write1Bit(unsigned char mBit )
+ 123          {
+ 124   1          CLK = 0;
+ 125   1          //delay_us(4);
+ 126   1          if(mBit)
+ 127   1              DIO = 1;
+ 128   1          else
+ 129   1              DIO = 0;
+ 130   1          delay_us(4);
+ 131   1          CLK = 1;
+ 132   1          delay_us(4);
+ 133   1      }
+ 134          
+ 135          /********************************************************************
+ 136          * 名称 : void TM1637_write1Byte(unsigned char mByte)
+ 137          * 功能 : 写1byte
+ 138          * 输入 : unsigned char mByte
+ 139          * 输出 : 无
+ 140          **************************************************************/
+ 141          void TM1637_write1Byte(unsigned char mByte)
+ 142          {
+ 143   1          char loop = 0;
+ 144   1          for(loop = 0; loop < 8; loop++)
+ 145   1          {
+ 146   2              TM1637_write1Bit((mByte>>loop)&0x01); //取得最低位
+ 147   2          }
+ 148   1          TM1637_ask();
  149   1      }
  150          
  151          /********************************************************************
- 152          * 名称 : Delay_1ms(unsigned int i)
- 153          * 功能 : 延时子程序，延时时间为 us
- 154          * 输入 :
+ 152          * 名称 : void TM1637_writeCammand(unsigned char mData)
+ 153          * 功能 : 写指令1byte
+ 154          * 输入 : unsigned char mData
  155          * 输出 : 无
  156          **************************************************************/
- 157          void delay_us(int i)
+ 157          void TM1637_writeCommand(unsigned char mData)
  158          {
- 159   1          for(; i>0; i--)
- 160   1            _nop_();
- 161   1      }
- 162          
- 163          /********************************************************************
- 164          * 名称 : Delay_1ms(unsigned int i)
- 165          * 功能 : 延时子程序，延时时间为 1ms * x
- 166          * 输入 : x (延时一毫秒的个数)
- 167          * 输出 : 无
- 168          ***********************************************************************/
- 169          void delay_ms(int i)//1ms延时
- 170          {
- 171   1          unsigned char x,j;
- 172   1          for(j=0;j<i;j++)
- 173   1          for(x=0;x<=110;x++);
- 174   1      }
+ 159   1          TM1637_start();
+ 160   1          TM1637_write1Byte(mData);  //数据
+ 161   1          TM1637_stop();
+ 162   1      }
+ 163          
+ 164          /********************************************************************
+ 165          * 名称 : void TM1637_writeData(unsigned char addr, unsigned char mData)
+ 166          * 功能 : 固定地址写数据1byte
+ 167          * 输入 : unsigned char addr, unsigned char mData
+ 168          * 输出 : 无
+ 169          **************************************************************/
+ 170          void TM1637_writeData(unsigned char addr, unsigned char mData)
+ 171          {
+ 172   1          TM1637_start();
+ 173   1          TM1637_write1Byte(addr);  //地址
+ 174   1          TM1637_write1Byte(mData);  //数据
+ 175   1          TM1637_stop();
+ 176   1      }
+C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 20:25:10 PAGE 4   
+
+ 177          
+ 178          /********************************************************************
+ 179          * 名称 : Delay_1ms(unsigned int i)
+ 180          * 功能 : 延时子程序，延时时间为 us
+ 181          * 输入 :
+ 182          * 输出 : 无
+ 183          **************************************************************/
+ 184          void delay_us(int i)
+ 185          {
+ 186   1          for(; i>0; i--)
+ 187   1            _nop_();
+ 188   1      }
+ 189          
+ 190          /********************************************************************
+ 191          * 名称 : Delay_1ms(unsigned int i)
+ 192          * 功能 : 延时子程序，延时时间为 1ms * x
+ 193          * 输入 : x (延时一毫秒的个数)
+ 194          * 输出 : 无
+ 195          ***********************************************************************/
+ 196          void delay_ms(int i)//1ms延时
+ 197          {
+ 198   1          unsigned char x,j;
+ 199   1          for(j=0;j<i;j++)
+ 200   1          for(x=0;x<=110;x++);
+ 201   1      }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-C51 COMPILER V9.56.0.0   TM1637                                                            07/30/2017 17:42:23 PAGE 4   
-
-   CODE SIZE        =    203    ----
+   CODE SIZE        =    337    ----
    CONSTANT SIZE    =     42    ----
    XDATA SIZE       =   ----    ----
    PDATA SIZE       =   ----    ----
-   DATA SIZE        =   ----       5
+   DATA SIZE        =   ----      18
    IDATA SIZE       =   ----    ----
    BIT SIZE         =   ----    ----
 END OF MODULE INFORMATION.
 
 
-C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

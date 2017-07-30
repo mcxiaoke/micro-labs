@@ -48,6 +48,7 @@ void time_display( void )
 {
     unsigned int min,sec;
     unsigned char mh,ml,sh,sl;
+    unsigned char buf[4];
     //seconds = 2601;
     min = seconds/60;
     sec = seconds%60;
@@ -56,14 +57,21 @@ void time_display( void )
     sh = sec/10;
     sl = sec%10;
     
-    TM1637_start();
-    TM1637_writeCommand(0x44);
-    TM1637_writeData(0xc0, CATHODE[mh]);
+    buf[0] = CATHODE[mh];
+    buf[1] = (dpFlag||seconds==0)?CATHODE_DOT[ml]:CATHODE[ml];
+    buf[2] = CATHODE[sh];
+    buf[3] = CATHODE[sl];
+    
+    TM1638_display_symbols(buf, 4);
+    
+    //TM1637_start();
+    //TM1637_writeCommand(0x44);
+    //TM1637_writeData(0xc0, CATHODE[mh]);
     //小数点标志为1则用小数点那个数组
-    TM1637_writeData(0xc1, (dpFlag||seconds==0)?CATHODE_DOT[ml]:CATHODE[ml]); 
-    TM1637_writeData(0xc2, CATHODE[sh]);
-    TM1637_writeData(0xc3, CATHODE[sl]);
-    TM1637_stop();
+    //TM1637_writeData(0xc1, (dpFlag||seconds==0)?CATHODE_DOT[ml]:CATHODE[ml]); 
+    //TM1637_writeData(0xc2, CATHODE[sh]);
+    //TM1637_writeData(0xc3, CATHODE[sl]);
+    //TM1637_stop();
 }
 
 /********************************************************************
