@@ -57,12 +57,17 @@ void time_display( void )
     sh = sec/10;
     sl = sec%10;
     
+    //buf[0] = mh;
+    //buf[1] = ml;
+    //buf[2] = sh;
+    //buf[3] = sl;
+    //TM1637_display_numbers(buf, 4);
+    
     buf[0] = CATHODE[mh];
     buf[1] = (dpFlag||seconds==0)?CATHODE_DOT[ml]:CATHODE[ml];
     buf[2] = CATHODE[sh];
     buf[3] = CATHODE[sl];
-    
-    TM1638_display_symbols(buf, 4);
+    TM1637_display_symbols(buf, 4);
     
     //TM1637_start();
     //TM1637_writeCommand(0x44);

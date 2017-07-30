@@ -89,7 +89,7 @@ void TM1637_ask( void )
 /**
  display 4 numbers, left to right
 **/
-void TM1638_display_numbers(unsigned char* numbers, unsigned char length)
+void TM1637_display_numbers(unsigned char* numbers, int length)
 {
     unsigned char i;
     unsigned char addr = 0xc0;
@@ -101,7 +101,7 @@ void TM1638_display_numbers(unsigned char* numbers, unsigned char length)
     TM1637_stop();
 }
 
-void TM1638_display_symbols(unsigned char* symbols, int length)
+void TM1637_display_symbols(unsigned char* symbols, int length)
 {
     unsigned char i;
     unsigned char addr = 0xc0;
