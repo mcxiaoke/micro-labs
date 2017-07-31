@@ -66,8 +66,14 @@ void setup() {
   Serial.begin(9600);
   wifi.begin(9600); 
   Serial.println("System is Ready!");
-  delay(200);
-  wifi.println("AT+CIFSR");
+  delay(20);
+  wifi.println("AT+CIPMUX=1");
+  delay(20);
+//  wifi.println("AT+CWJAP?");
+//  delay(20);
+//  wifi.println("AT+CWSAP?");
+//  delay(20);
+//  wifi.println("AT+CIFSR");
 }
 
 void loop() {
