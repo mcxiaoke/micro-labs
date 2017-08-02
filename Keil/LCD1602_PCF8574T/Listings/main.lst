@@ -1,0 +1,228 @@
+C51 COMPILER V9.56.0.0   MAIN                                                              07/31/2017 21:51:14 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          //#include "lcd1602.h"
+   2          // from https://wenku.baidu.com/view/
+   3          // 12155a3edd3383c4ba4cd20d.html
+   4          #include <reg52.h>
+   5          #include <intrins.h>
+   6          sbit SCL = P2^0;
+   7          sbit SDA = P2^1;
+   8          bit ack;
+   9          unsigned char LCD_data;
+  10          unsigned char code digit[ ]={"0123456789"}; //定义字符数组显示数字
+  11          //*****************延时************************
+  12          void delay_nus(unsigned int n) //N us延时函数
+  13          {
+  14   1        unsigned int i=0;
+  15   1          for (i=0;i<n;i++)
+  16   1            _nop_();
+  17   1      }
+  18          void delay_nms(unsigned int n) //N ms延时函数
+  19          {
+  20   1        unsigned int i,j;
+  21   1          for (i=0;i<n;i++)
+  22   1            for (j=0;j<1140;j++);
+  23   1      }
+  24          
+  25          void nop4()
+  26          {
+  27   1         _nop_();     //等待一个机器周期
+  28   1         _nop_();     //等待一个机器周期
+  29   1         _nop_();     //等待一个机器周期
+  30   1         _nop_();     //等待一个机器周期
+  31   1      }
+  32          //***************************************
+  33          void Start()
+  34          {
+  35   1        SDA=1;
+  36   1          _nop_();
+  37   1          SCL=1;
+  38   1        nop4();
+  39   1          SDA=0;
+  40   1        nop4();
+  41   1          SCL=0;
+  42   1          _nop_();
+  43   1        _nop_();
+  44   1      }
+  45          void Stop()
+  46          {
+  47   1        SDA=0;
+  48   1          _nop_();  
+  49   1      
+  50   1        SCL=0;
+  51   1        nop4();//>4us后SCL跳变
+  52   1        SCL=1;
+  53   1        nop4();
+  54   1        SDA=1;
+C51 COMPILER V9.56.0.0   MAIN                                                              07/31/2017 21:51:14 PAGE 2   
+
+  55   1          _nop_();
+  56   1          _nop_();
+  57   1      }
+  58          //******************************************
+  59          void  Write_A_Byte(unsigned char c)
+  60          {
+  61   1       unsigned char BitCnt;
+  62   1        for(BitCnt=0;BitCnt<8;BitCnt++)  //要传送的数据长度为8位
+  63   1          {
+  64   2           if((c<<BitCnt)&0x80)  SDA=1;   //判断发送位
+  65   2           else  SDA=0;                
+  66   2           _nop_();
+  67   2           SCL=1;               //置时钟线为高，通知被控器开始接收数据位
+  68   2           nop4(); 
+  69   2           _nop_();       
+  70   2           SCL=0; 
+  71   2          }  
+  72   1          _nop_();
+  73   1          _nop_();
+  74   1          SDA=1;               //8位发送完后释放数据线，准备接收应答位
+  75   1          _nop_();
+  76   1          _nop_();  
+  77   1          SCL=1;
+  78   1          _nop_();
+  79   1          _nop_();
+  80   1          _nop_();
+  81   1          if(SDA==1)ack=0;     
+  82   1             else ack=1;        //判断是否接收到应答信号
+  83   1          SCL=0;
+  84   1          _nop_();
+  85   1          _nop_();
+  86   1      }
+  87          
+  88          bit Write_Random_Address_Byte(unsigned char add,unsigned char dat)
+  89          {
+  90   1        Start();    //启动总线
+  91   1        Write_A_Byte(add); //发送器件地址
+  92   1          if(ack==0)return(0);
+  93   1        Write_A_Byte(dat);   //发送数据
+  94   1          if(ack==0)return(0);
+  95   1        Stop(); //结束总线
+  96   1          return(1);
+  97   1      }
+  98          //********************液晶屏使能*********************
+  99          void Enable_LCD_write()
+ 100          {
+ 101   1          LCD_data|=(1<<(3-1));//E=1;
+ 102   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 103   1          delay_nus(2);
+ 104   1          LCD_data&=~(1<<(3-1));//E=0;
+ 105   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 106   1      }
+ 107          
+ 108          //*************写命令****************************
+ 109          void LCD_write_command(unsigned char command)
+ 110          {
+ 111   1        delay_nus(16);
+ 112   1        LCD_data&=~(1<<(1-1));//RS=0;
+ 113   1        LCD_data&=~(1<<(2-1));//RW=0;
+ 114   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 115   1      
+ 116   1        LCD_data&=0X0f; //清高四位
+C51 COMPILER V9.56.0.0   MAIN                                                              07/31/2017 21:51:14 PAGE 3   
+
+ 117   1        LCD_data|=command & 0xf0; //写高四位
+ 118   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 119   1          Enable_LCD_write();
+ 120   1      
+ 121   1        command=command<<4; //低四位移到高四位
+ 122   1        LCD_data&=0x0f; //清高四位
+ 123   1        LCD_data|=command&0xf0; //写低四位
+ 124   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 125   1          Enable_LCD_write();
+ 126   1      }
+ 127          //*************写数据****************************
+ 128          void LCD_write_data(unsigned char value) 
+ 129          {
+ 130   1        delay_nus(16);
+ 131   1        LCD_data|=(1<<(1-1));//RS=1;
+ 132   1        LCD_data&=~(1<<(2-1));//RW=0;
+ 133   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 134   1      
+ 135   1        LCD_data&=0X0f; //清高四位
+ 136   1        LCD_data|=value&0xf0; //写高四位
+ 137   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 138   1          Enable_LCD_write();
+ 139   1      
+ 140   1        value=value<<4; //低四位移到高四位
+ 141   1        LCD_data&=0x0f; //清高四位
+ 142   1        LCD_data|=value&0xf0; //写低四位
+ 143   1          Write_Random_Address_Byte(0x40,LCD_data);
+ 144   1          Enable_LCD_write();
+ 145   1      }
+ 146          
+ 147          //**********************设置显示位置*********************************
+ 148          void set_position(unsigned char x,unsigned char y)
+ 149          {
+ 150   1        unsigned char position;
+ 151   1        if (y == 0)
+ 152   1              position = 0x80 + x;
+ 153   1        else 
+ 154   1          position = 0xc0 + x;
+ 155   1          LCD_write_command(position);
+ 156   1      }
+ 157          //**********************显示字符串*****************************
+ 158          
+ 159          void display_string(unsigned char x,unsigned char y,unsigned char *s)
+ 160          { 
+ 161   1          set_position(x,y);
+ 162   1        while (*s) 
+ 163   1        {     
+ 164   2          LCD_write_data(*s);     
+ 165   2          s++;     
+ 166   2        }
+ 167   1      }
+ 168          //*************液晶初始化****************************
+ 169          void LCD_init(void) 
+ 170          { 
+ 171   1        LCD_write_command(0x28);
+ 172   1        delay_nus(40); 
+ 173   1        LCD_write_command(0x28);
+ 174   1        delay_nus(40); 
+ 175   1        //Enable_LCD_write();
+ 176   1        delay_nus(40);
+ 177   1        LCD_write_command(0x28); //4位显示！
+ 178   1        LCD_write_command(0x0c); //显示开
+C51 COMPILER V9.56.0.0   MAIN                                                              07/31/2017 21:51:14 PAGE 4   
+
+ 179   1        delay_nms(2);
+ 180   1        LCD_write_command(0x01); //清屏
+ 181   1        delay_nms(2);
+ 182   1      }
+ 183          void main(void)
+ 184          {
+ 185   1        LCD_init();
+ 186   1        display_string(4,0,"imxuheng"); //显示一段文字
+ 187   1        display_string(2,1,"Hello Today!"); //显示一段文字
+ 188   1        while(1);
+ 189   1      }
+ 190          
+ 191          
+ 192          void main0()
+ 193          {
+ 194   1        //lcd_init();
+ 195   1        //lcd_display(4,0,"2017");
+ 196   1        //lcd_display(2,1, "Hello, World!");
+ 197   1        while(1);
+ 198   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    413    ----
+   CONSTANT SIZE    =     33    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
