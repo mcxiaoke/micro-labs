@@ -1,5 +1,9 @@
 #ifndef _KT_SOFT_I2C_
-	#define _KT_SOFT_I2C_
+#define _KT_SOFT_I2C_
+
+#define uint8_t unsigned char
+#define uint32_t unsigned long
+  
 	void KT_I2C_Start(void);
 	void KT_I2C_Stop(void);
 	uint8_t KT_I2C_Write(uint8_t u8Data);

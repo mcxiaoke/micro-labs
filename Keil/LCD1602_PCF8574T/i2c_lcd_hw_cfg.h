@@ -2,8 +2,8 @@
 	#define _KT_I2C_LCD_CFG_
   
 #include <reg51.h>
-  sbit SDA = P2^1;
-  sbit SCL = P2^0;
+  sbit SDA = P1^0;
+  sbit SCL = P1^1;
 
 	void Delay10us(void);
   // addr = 0x27 << 1 = 0x4e

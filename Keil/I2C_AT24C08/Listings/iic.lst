@@ -1,0 +1,273 @@
+C51 COMPILER V9.56.0.0   IIC                                                               08/03/2017 23:50:23 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE IIC
+OBJECT MODULE PLACED IN .\Objects\iic.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE iic.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\iic.l
+                    -st) TABS(2) OBJECT(.\Objects\iic.obj)
+
+line level    source
+
+   1          /*==========================================================================
+   2            名称：IIC协议 
+   3            编写：aiken
+   4            修改：无
+   5            内容：函数是采用软件延时的方法产生SCL脉冲，固对高晶振频率要作一定的修�
+             -�
+   6                 (本例是1us机器周期，即晶振频率要小于12MHZ)
+   7          ============================================================================*/ 
+   8          
+   9          #include "iic.h"
+  10          
+  11          bit ack;
+  12          
+  13          void delay_us(int i)
+  14          {
+  15   1        _nop_();
+  16   1        _nop_();
+  17   1        _nop_();
+  18   1        _nop_();
+  19   1        _nop_();
+  20   1      }
+*** WARNING C280 IN LINE 13 OF iic.c: 'i': unreferenced local variable
+  21          
+  22          void iic_wait()
+  23          {
+  24   1        unsigned char i;
+  25   1        while((SCL==0)&&(++i<250));
+  26   1      }
+  27          
+  28          /*=================================================
+  29                              启动总线
+  30          ==================================================*/
+  31          void iic_start()
+  32          {
+  33   1          SDA = 1;       //发送起始条件的数据信号
+  34   1          delay_us(1);
+  35   1          SCL = 1;
+  36   1          delay_us(1);   //起始条件建立时间大于4.7us,延时
+  37   1          SDA = 0;       //发送起始信号
+  38   1          delay_us(1);   //起始条件锁定时间大于4μ
+  39   1          SCL = 0;       //钳住I2C总线，准备发送或接收数据
+  40   1      }
+  41          
+  42          /*=================================================
+  43                              结束总线
+  44          ==================================================*/
+  45          void iic_stop()
+  46          {
+  47   1          SDA = 0;       //发送结束条件的数据信号
+  48   1          delay_us(1);
+  49   1          SCL = 1;
+  50   1          delay_us(1);   //结束条件建立时间大于4μ
+  51   1          SDA = 1;       //发送I2C总线结束信号
+  52   1          delay_us(1);
+C51 COMPILER V9.56.0.0   IIC                                                               08/03/2017 23:50:23 PAGE 2   
+
+  53   1          //SCL = 0;
+  54   1      }
+  55          
+  56          /*=====================================================================
+  57                                 发送一个字节数据               
+  58          函数原型: bit iic_send_byte(unsigned char byte);
+  59          功能: 将数据byte发送出去,可以是地址,也可以是数据,发完后等待应答,并对
+  60                此状态位进行操作.(不应答或非应答都使ack=0 假)     
+  61                发送数据正常，ack=1; ack=0表示被控器无应答或损坏。
+  62          ======================================================================*/
+  63          bit iic_send_byte(unsigned char byte)
+  64          {
+  65   1          unsigned char i;
+  66   1        
+  67   1          for(i = 0; i < 8; i++)    //要传送的数据长度为8位
+  68   1          {
+  69   2              SDA = byte & 0x80;    //判断发送位
+  70   2              SCL = 1;              //置时钟线为高，通知被控器开始接收数据位
+  71   2              delay_us(1);          //保证时钟高电平周期大于4μ
+  72   2              SCL = 0;
+  73   2              byte <<= 1;
+  74   2          }
+  75   1        
+  76   1        SCL = 1;
+  77   1        SDA = 1;                  //8位发送完后释放数据线，准备接收应答位
+  78   1        delay_us(1);
+  79   1        iic_wait();
+  80   1        if(0 == SDA)              //判断是否接收到应答信号
+  81   1        {
+  82   2            ack = 1;
+  83   2        }
+  84   1        else
+  85   1        {
+  86   2            ack = 0;
+  87   2        }
+  88   1        
+  89   1        SCL = 0;
+  90   1        return ack;
+  91   1      }
+  92          
+  93          /*===================================================================================
+  94                                       接受一个字节数据               
+  95          函数原型: unsigned char iic_receive_byte();
+  96          功能:  用来接收从器件传来的数据,并判断总线错误(不发应答信号)，发完后请用�
+             -��答函数。  
+  97          ====================================================================================*/  
+  98          unsigned char iic_receive_byte()
+  99          {
+ 100   1          unsigned char i;
+ 101   1        unsigned char a;
+ 102   1        unsigned char temp = 0;
+ 103   1        
+ 104   1        SDA = 1;                      //置数据线为输入方式
+ 105   1        
+ 106   1        for(i = 0; i < 8; i++)
+ 107   1        {
+ 108   2            SCL = 0;                  //置时钟线为低，准备接收数据位
+ 109   2          delay_us(1);              //时钟低电平周期大于4.7us
+ 110   2          SCL = 1;                  //置时钟线为高使数据线上数据有效
+ 111   2          
+ 112   2          if(SDA)
+ 113   2          {
+C51 COMPILER V9.56.0.0   IIC                                                               08/03/2017 23:50:23 PAGE 3   
+
+ 114   3              a = 1;
+ 115   3          }
+ 116   2          else
+ 117   2          { 
+ 118   3              a = 0;
+ 119   3          }
+ 120   2          
+ 121   2          temp |= (a << (7 - i));   //读数据位,接收的数据位放入retc中
+ 122   2          delay_us(1);
+ 123   2        }
+ 124   1        iic_wait();
+ 125   1        SCL = 0;
+ 126   1        return temp;
+ 127   1      }
+ 128          
+ 129          /*===============================================================
+ 130                                   应答子函数
+ 131          ================================================================*/
+ 132          void iic_ack()
+ 133          {
+ 134   1          SDA = 0;
+ 135   1        SCL = 1;
+ 136   1        delay_us(1);    //时钟低电平周期大于4μ
+ 137   1        SCL = 0;        //清时钟线，钳住I2C总线以便继续接收
+ 138   1      }
+ 139          
+ 140          /*================================================================
+ 141                                  非应答子函数
+ 142          =================================================================*/
+ 143          void iic_noack()
+ 144          {
+ 145   1          SDA = 1;
+ 146   1        SCL = 1;
+ 147   1        delay_us(1);    //时钟低电平周期大于4μ
+ 148   1        SCL = 0;        //清时钟线，钳住I2C总线以便继续接收
+ 149   1      }
+ 150          
+ 151          /*===========================================================================================
+ 152                                 向有子地址器件发送多字节数据函数               
+ 153          函数原型: bit iic_send_str(unsigned char sla, unsigned char suba, unsigned char *str, unsigned char le
+             -n);  
+ 154          功能: 从启动总线到发送地址，子地址，数据，结束总线的全过程。
+ 155                从器件地址sla，子地址suba，发送内容是str指向的内容，发送len个字节。
+ 156                如果返回1表示操作成功，否则操作有误。
+ 157          注意：使用前必须已结束总线。
+ 158          =============================================================================================*/
+ 159          bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char dat, bit stop)
+ 160          {
+ 161   1          unsigned char i;
+ 162   1        
+ 163   1        iic_start();                //启动总线
+ 164   1        
+ 165   1        iic_send_byte(addr);         //发送器件地址
+ 166   1        if(0 == ack)
+ 167   1        {
+ 168   2            return ERR;
+ 169   2        }
+ 170   1        
+ 171   1        iic_send_byte(pos);        //发送器件子地址
+ 172   1        if(0 == ack)
+ 173   1        {
+ 174   2            return ERR;
+C51 COMPILER V9.56.0.0   IIC                                                               08/03/2017 23:50:23 PAGE 4   
+
+ 175   2        }
+ 176   1        
+ 177   1        iic_send_byte(dat); //发送数据
+ 178   1        delay_us(1); //必须延时等待芯片内部自动处理数据完毕
+ 179   1        if(0 == ack)
+ 180   1        {
+ 181   2             return ERR;
+ 182   2        }
+ 183   1        if(stop)
+ 184   1        {
+ 185   2          iic_stop();                 //结束总线
+ 186   2        }
+ 187   1        return SUCC;
+ 188   1      }
+*** WARNING C280 IN LINE 161 OF iic.c: 'i': unreferenced local variable
+ 189          
+ 190          /*===========================================================================================
+ 191                                  向有子地址器件读取多字节数据函数               
+ 192          函数原型: bit iic_receive_str(unsigned char sla, unsigned char suba, unsigned char *str, unsigned char
+             - len); 
+ 193          功能: 从启动总线到发送地址，子地址，读数据，结束总线的全过程。
+ 194                从器件地址sla，子地址suba，读出的内容放入str指向的存储区，读len个字节。
+ 195                如果返回1表示操作成功，否则操作有误。
+ 196          注意：使用前必须已结束总线。
+ 197          =============================================================================================*/
+ 198          bit iic_receive_str(unsigned char addr, unsigned char pos, unsigned char* str, unsigned char len)
+ 199          {
+ 200   1          unsigned char i;
+ 201   1        
+ 202   1        iic_start();                     //启动总线
+ 203   1        
+ 204   1        iic_send_byte(addr);              //发送器件地址
+ 205   1        if(0 == ack)
+ 206   1        {
+ 207   2            return ERR;
+ 208   2        }
+ 209   1        
+ 210   1        iic_send_byte(pos);             //发送器件子地址
+ 211   1        if(0 == ack)
+ 212   1        {
+ 213   2            return ERR;
+ 214   2        }
+ 215   1        
+ 216   1        iic_start();
+ 217   1        iic_send_byte(addr + 1);
+ 218   1        if(0 == ack)
+ 219   1        {
+ 220   2            return ERR;
+ 221   2        }
+ 222   1        
+ 223   1        for(i = 0; i < len - 1; i++)
+ 224   1        {
+ 225   2            *str = iic_receive_byte();   //发送数据
+ 226   2          iic_ack();                   //发送就答位 
+ 227   2          str++;
+ 228   2        }
+ 229   1        
+ 230   1        *str = iic_receive_byte();
+ 231   1        iic_noack();                     //发送非应位
+ 232   1        iic_stop();                      //结束总线
+ 233   1        
+ 234   1        return SUCC;
+C51 COMPILER V9.56.0.0   IIC                                                               08/03/2017 23:50:23 PAGE 5   
+
+ 235   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    338    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      11
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

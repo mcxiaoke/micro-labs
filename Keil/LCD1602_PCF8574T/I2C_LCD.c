@@ -1,23 +1,5 @@
 #include <reg51.h>
-
-#define uint8_t unsigned char
-#define uint32_t unsigned long
-
-#include "i2c_lcd_hw_cfg.h"
-#include "soft_i2c.h"
-
-static uint8_t u8LCD_Buff[8];//bo nho dem luu lai toan bo
-static uint8_t u8LcdTmp;
-
-#define	MODE_4_BIT		0x28
-#define	CLR_SCR			0x01
-#define	DISP_ON			0x0C
-#define	CURSOR_ON		0x0E
-#define	CURSOR_HOME		0x80
-
-void LCD_Write_4bit(uint8_t u8Data);
-void FlushVal(void);
-void KT_I2C_LCD_WriteCmd(uint8_t u8Cmd);
+#include "I2C_LCD.h"
 
 void Delay10us(void) {
 	//uint8_t i;
@@ -242,15 +224,4 @@ void KT_I2C_LCD_BackLight(uint8_t u8BackLight) {
 		u8LCD_Buff[LCD_BL]=0;
 	}
 	FlushVal();
-}
-
-void main()
-{
-  KT_I2C_LCD_Init();
-  KT_I2C_LCD_BackLight(1);
-  KT_I2C_LCD_Clear();
-  KT_I2C_LCD_Puts("Hello, World!");
-  KT_I2C_LCD_NewLine();
-  KT_I2C_LCD_Puts("LCD1602, PCF8574T");
-  while(1);
 }
