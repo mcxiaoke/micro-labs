@@ -12,7 +12,8 @@
 sbit SDA = P2^1;
 sbit SCL = P2^0;
 
-void delay_us(int i);
+void iic_delay();
+void iic_init();
 void iic_wait();
 void iic_start();
 void iic_stop();
@@ -20,7 +21,7 @@ bit iic_send_byte(unsigned char byte);
 unsigned char iic_receive_byte();
 void iic_ack();
 void iic_noack();
-bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char dat, bit stop);
+bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char *str, unsigned char len);
 bit iic_receive_str(unsigned char addr, unsigned char pos, unsigned char* str, unsigned char len);
 
 #endif

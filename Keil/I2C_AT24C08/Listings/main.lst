@@ -1,37 +1,38 @@
-C51 COMPILER V9.56.0.0   MAIN                                                              08/03/2017 23:50:23 PAGE 1   
+C51 COMPILER V9.56.0.0   MAIN                                                              08/04/2017 13:43:58 PAGE 1   
 
 
 C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MAIN
 OBJECT MODULE PLACED IN .\Objects\main.obj
-COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
-                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+COMPILER INVOKED BY: C:\Keil\ARM\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\mai
+                    -n.lst) OBJECT(.\Objects\main.obj)
 
 line level    source
 
    1          #include "iic.h"
    2          
-   3          void main()
+   3          void delay_us(int i)
    4          {
-   5   1        //iic_start();
-   6   1        //iic_send_byte(0xa0);
-   7   1        //iic_send_byte(0x04);
-   8   1        //iic_send_byte(0x08);
-   9   1        //iic_stop();
-  10   1        unsigned char tmp[2];
-  11   1        //iic_send_str(0xa0, 0x04, 0x08, 0);
-  12   1        //iic_send_str(0xa0, 0x05, 0x09, 1);
-  13   1        iic_receive_str(0xa0,0x04,tmp,2);
-  14   1        
-  15   1        while(1);
-  16   1      }
+   5   1          while(i-->0);
+   6   1      }
+   7          
+   8          void main()
+   9          {
+  10   1          unsigned char rx[4];
+  11   1          unsigned char tx[] = {0x51, 0x63, 0x8c,0xe4};
+  12   1          iic_send_str(0xa0, 0x00, tx, 4);
+  13   1          delay_us(60); // delay between write and read must >= 60us
+  14   1          iic_receive_str(0xa0, 0x00, rx, 4);
+  15   1          
+  16   1          while(1);
+  17   1      }
 
 
 MODULE INFORMATION:   STATIC OVERLAYABLE
-   CODE SIZE        =     18    ----
-   CONSTANT SIZE    =   ----    ----
+   CODE SIZE        =     78    ----
+   CONSTANT SIZE    =      4    ----
    XDATA SIZE       =   ----    ----
    PDATA SIZE       =   ----    ----
-   DATA SIZE        =   ----       2
+   DATA SIZE        =   ----       8
    IDATA SIZE       =   ----    ----
    BIT SIZE         =   ----    ----
 END OF MODULE INFORMATION.

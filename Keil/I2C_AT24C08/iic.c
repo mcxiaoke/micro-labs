@@ -10,19 +10,26 @@
 
 bit ack;
 
-void delay_us(int i)
-{
-  _nop_();
-  _nop_();
-  _nop_();
-  _nop_();
-  _nop_();
-}
-
 void iic_wait()
 {
   unsigned char i;
   while((SCL==0)&&(++i<250));
+}
+
+void iic_delay()
+{
+    _nop_();
+    _nop_();
+    _nop_();
+    _nop_();
+    _nop_();
+}
+
+void iic_init()
+{
+    SDA = 1;
+    SCL = 1;
+    iic_delay();
 }
 
 /*=================================================
@@ -31,11 +38,11 @@ void iic_wait()
 void iic_start()
 {
     SDA = 1;       //发送起始条件的数据信号
-    delay_us(1);
+    iic_delay();
     SCL = 1;
-    delay_us(1);   //起始条件建立时间大于4.7us,延时
+    iic_delay();   //起始条件建立时间大于4.7us,延时
     SDA = 0;       //发送起始信号
-    delay_us(1);   //起始条件锁定时间大于4μ
+    iic_delay();   //起始条件锁定时间大于4μ
     SCL = 0;       //钳住I2C总线，准备发送或接收数据
 }
 
@@ -45,12 +52,11 @@ void iic_start()
 void iic_stop()
 {
     SDA = 0;       //发送结束条件的数据信号
-    delay_us(1);
+    iic_delay();
     SCL = 1;
-    delay_us(1);   //结束条件建立时间大于4μ
+    iic_delay();   //结束条件建立时间大于4μ
     SDA = 1;       //发送I2C总线结束信号
-    delay_us(1);
-    //SCL = 0;
+    iic_delay();
 }
 
 /*=====================================================================
@@ -68,15 +74,15 @@ bit iic_send_byte(unsigned char byte)
     {
         SDA = byte & 0x80;    //判断发送位
         SCL = 1;              //置时钟线为高，通知被控器开始接收数据位
-        delay_us(1);          //保证时钟高电平周期大于4μ
+        iic_delay();          //保证时钟高电平周期大于4μ
         SCL = 0;
         byte <<= 1;
     }
 	
 	SCL = 1;
 	SDA = 1;                  //8位发送完后释放数据线，准备接收应答位
-	delay_us(1);
-	iic_wait();
+    //iic_wait();
+	iic_delay();
 	if(0 == SDA)              //判断是否接收到应答信号
 	{
 	    ack = 1;
@@ -106,7 +112,7 @@ unsigned char iic_receive_byte()
 	for(i = 0; i < 8; i++)
 	{
 	    SCL = 0;                  //置时钟线为低，准备接收数据位
-		delay_us(1);              //时钟低电平周期大于4.7us
+		iic_delay();              //时钟低电平周期大于4.7us
 		SCL = 1;                  //置时钟线为高使数据线上数据有效
 		
 		if(SDA)
@@ -119,9 +125,8 @@ unsigned char iic_receive_byte()
 		}
 		
 		temp |= (a << (7 - i));   //读数据位,接收的数据位放入retc中
-		delay_us(1);
+		iic_delay();
 	}
-	iic_wait();
 	SCL = 0;
 	return temp;
 }
@@ -133,7 +138,7 @@ void iic_ack()
 {
     SDA = 0;
 	SCL = 1;
-	delay_us(1);    //时钟低电平周期大于4μ
+	iic_delay();    //时钟低电平周期大于4μ
 	SCL = 0;        //清时钟线，钳住I2C总线以便继续接收
 }
 
@@ -144,19 +149,19 @@ void iic_noack()
 {
     SDA = 1;
 	SCL = 1;
-	delay_us(1);    //时钟低电平周期大于4μ
+	iic_delay();    //时钟低电平周期大于4μ
 	SCL = 0;        //清时钟线，钳住I2C总线以便继续接收
 }
 
 /*===========================================================================================
                        向有子地址器件发送多字节数据函数               
-函数原型: bit iic_send_str(unsigned char sla, unsigned char suba, unsigned char *str, unsigned char len);  
+函数原型: bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char *str, unsigned char len);  
 功能: 从启动总线到发送地址，子地址，数据，结束总线的全过程。
-      从器件地址sla，子地址suba，发送内容是str指向的内容，发送len个字节。
+      从器件地址addr，子地址pos，发送内容是str指向的内容，发送len个字节。
       如果返回1表示操作成功，否则操作有误。
 注意：使用前必须已结束总线。
 =============================================================================================*/
-bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char dat, bit stop)
+bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char *str, unsigned char len)
 {
     unsigned char i;
 	
@@ -174,24 +179,28 @@ bit iic_send_str(unsigned char addr, unsigned char pos, unsigned char dat, bit s
 	    return ERR;
 	}
 	
-  iic_send_byte(dat); //发送数据
-  delay_us(1); //必须延时等待芯片内部自动处理数据完毕
-	if(0 == ack)
+	for(i = 0; i < len; i++)
 	{
-		   return ERR;
+	    iic_send_byte(*str);    //发送数据
+		iic_delay();            //必须延时等待芯片内部自动处理数据完毕
+		
+		if(0 == ack)
+		{
+		    return ERR;
+		}
+		
+		str++;
 	}
-	if(stop)
-  {
-    iic_stop();                 //结束总线
-  }
+	
+	iic_stop();                 //结束总线
 	return SUCC;
 }
 
 /*===========================================================================================
                         向有子地址器件读取多字节数据函数               
-函数原型: bit iic_receive_str(unsigned char sla, unsigned char suba, unsigned char *str, unsigned char len); 
+函数原型: bit iic_receive_str(unsigned char addr, unsigned char pos, unsigned char *str, unsigned char len); 
 功能: 从启动总线到发送地址，子地址，读数据，结束总线的全过程。
-      从器件地址sla，子地址suba，读出的内容放入str指向的存储区，读len个字节。
+      从器件地址addr，子地址pos，读出的内容放入str指向的存储区，读len个字节。
       如果返回1表示操作成功，否则操作有误。
 注意：使用前必须已结束总线。
 =============================================================================================*/
@@ -230,6 +239,5 @@ bit iic_receive_str(unsigned char addr, unsigned char pos, unsigned char* str, u
 	*str = iic_receive_byte();
 	iic_noack();                     //发送非应位
 	iic_stop();                      //结束总线
-	
 	return SUCC;
 }
