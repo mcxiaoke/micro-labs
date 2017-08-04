@@ -18,7 +18,7 @@ void i2c_wait();
 void i2c_start();
 void i2c_stop();
 bit i2c_write(unsigned char byte);
-unsigned char iic_read();
+unsigned char i2c_read();
 void i2c_ack();
 void i2c_noack();
 bit i2c_write_str(unsigned char addr, unsigned char pos, unsigned char *str, unsigned char len);
