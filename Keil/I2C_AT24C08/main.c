@@ -1,4 +1,4 @@
-#include "iic.h"
+#include "../libs/i2c/i2c.h"
 
 void delay_us(int i)
 {
@@ -7,11 +7,11 @@ void delay_us(int i)
 
 void main()
 {
-    unsigned char rx[4];
-    unsigned char tx[] = {0x51, 0x63, 0x8c,0xe4};
-    iic_send_str(0xa0, 0x00, tx, 4);
+    unsigned char rx[8];
+    unsigned char tx[] = {0x12,0x34,0x56,0x78,0x9a,0xbc,0xde,0xf0};
+    i2c_write_str(0xa0, 0x00, tx, 8);
     delay_us(60); // delay between write and read must >= 60us
-    iic_receive_str(0xa0, 0x00, rx, 4);
+    i2c_read_str(0xa0, 0x00, rx, 8);
     
     while(1);
 }

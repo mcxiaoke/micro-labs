@@ -1,9 +1,9 @@
-BL51 BANKED LINKER/LOCATER V6.22                                                        08/04/2017  13:43:58  PAGE 1
+BL51 BANKED LINKER/LOCATER V6.22                                                        08/04/2017  14:22:49  PAGE 1
 
 
 BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
-C:\KEIL\ARM\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, .\Objects\iic.obj TO .\Objects\I2C_AT24C08 PRINT
->>  (.\Listings\I2C_AT24C08.m51) RAMSIZE (256)
+C:\KEIL\ARM\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, ..\libs\i2c\Objects\libi2c.LIB TO .\Objects\I2C_
+>> AT24C08 PRINT (.\Listings\I2C_AT24C08.m51) RAMSIZE (256)
 
 
 MEMORY MODEL: SMALL
@@ -12,7 +12,7 @@ MEMORY MODEL: SMALL
 INPUT MODULES INCLUDED:
   .\Objects\STARTUP.obj (?C_STARTUP)
   .\Objects\main.obj (MAIN)
-  .\Objects\iic.obj (IIC)
+  ..\libs\i2c\Objects\libi2c.LIB (I2C)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?COPY)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?CLDPTR)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?CSTPTR)
@@ -26,83 +26,82 @@ LINK MAP OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
 
             * * * * * * *   D A T A   M E M O R Y   * * * * * * *
             REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
-            DATA    0008H     000FH     UNIT         _DATA_GROUP_
-            DATA    0017H     0001H     UNIT         ?DT?IIC_WAIT?IIC
-                    0018H     0008H                  *** GAP ***
-            BIT     0020H.0   0000H.1   UNIT         ?BI?IIC
+            DATA    0008H     0017H     UNIT         _DATA_GROUP_
+            DATA    001FH     0001H     UNIT         ?DT?I2C_WAIT?I2C
+            BIT     0020H.0   0000H.1   UNIT         ?BI?I2C
                     0020H.1   0000H.7                *** GAP ***
             IDATA   0021H     0001H     UNIT         ?STACK
 
             * * * * * * *   C O D E   M E M O R Y   * * * * * * *
             CODE    0000H     0003H     ABSOLUTE     
             CODE    0003H     0121H     UNIT         ?C?LIB_CODE
-            CODE    0124H     0056H     UNIT         ?PR?_IIC_RECEIVE_STR?IIC
-            CODE    017AH     003DH     UNIT         ?PR?_IIC_SEND_STR?IIC
+            CODE    0124H     0056H     UNIT         ?PR?_I2C_READ_STR?I2C
+            CODE    017AH     003DH     UNIT         ?PR?_I2C_WRITE_STR?I2C
             CODE    01B7H     003CH     UNIT         ?PR?MAIN?MAIN
-            CODE    01F3H     0032H     UNIT         ?PR?IIC_RECEIVE_BYTE?IIC
-            CODE    0225H     002AH     UNIT         ?PR?_IIC_SEND_BYTE?IIC
+            CODE    01F3H     0032H     UNIT         ?PR?I2C_READ?I2C
+            CODE    0225H     002AH     UNIT         ?PR?_I2C_WRITE?I2C
             CODE    024FH     0012H     UNIT         ?PR?_DELAY_US?MAIN
-            CODE    0261H     0012H     UNIT         ?PR?IIC_START?IIC
-            CODE    0273H     000FH     UNIT         ?PR?IIC_STOP?IIC
-            CODE    0282H     000DH     UNIT         ?PR?IIC_WAIT?IIC
+            CODE    0261H     0012H     UNIT         ?PR?I2C_START?I2C
+            CODE    0273H     000FH     UNIT         ?PR?I2C_STOP?I2C
+            CODE    0282H     000DH     UNIT         ?PR?I2C_WAIT?I2C
             CODE    028FH     000CH     UNIT         ?C_C51STARTUP
-            CODE    029BH     000AH     UNIT         ?PR?IIC_ACK?IIC
-            CODE    02A5H     000AH     UNIT         ?PR?IIC_NOACK?IIC
-            CODE    02AFH     0007H     UNIT         ?PR?IIC_INIT?IIC
-            CODE    02B6H     0006H     UNIT         ?PR?IIC_DELAY?IIC
-            CODE    02BCH     0004H     UNIT         ?CO?MAIN
+            CODE    029BH     000AH     UNIT         ?PR?I2C_ACK?I2C
+            CODE    02A5H     000AH     UNIT         ?PR?I2C_NOACK?I2C
+            CODE    02AFH     0008H     UNIT         ?CO?MAIN
+            CODE    02B7H     0007H     UNIT         ?PR?I2C_INIT?I2C
+            CODE    02BEH     0006H     UNIT         ?PR?I2C_DELAY?I2C
 
 
 
 OVERLAY MAP OF MODULE:   .\Objects\I2C_AT24C08 (?C_STARTUP)
 
 
-SEGMENT                            DATA_GROUP 
-  +--> CALLED SEGMENT            START    LENGTH
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 2
+SEGMENT                          DATA_GROUP 
+  +--> CALLED SEGMENT          START    LENGTH
+----------------------------------------------
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 2
 
 
-------------------------------------------------
-?C_C51STARTUP                    -----    -----
+?C_C51STARTUP                  -----    -----
   +--> ?PR?MAIN?MAIN
 
-?PR?MAIN?MAIN                    0008H    0008H
+?PR?MAIN?MAIN                  0008H    0010H
   +--> ?CO?MAIN
-  +--> ?PR?_IIC_SEND_STR?IIC
+  +--> ?PR?_I2C_WRITE_STR?I2C
   +--> ?PR?_DELAY_US?MAIN
-  +--> ?PR?_IIC_RECEIVE_STR?IIC
+  +--> ?PR?_I2C_READ_STR?I2C
 
-?PR?_IIC_SEND_STR?IIC            0010H    0006H
-  +--> ?PR?IIC_START?IIC
-  +--> ?PR?_IIC_SEND_BYTE?IIC
-  +--> ?PR?IIC_DELAY?IIC
-  +--> ?PR?IIC_STOP?IIC
+?PR?_I2C_WRITE_STR?I2C         0018H    0006H
+  +--> ?PR?I2C_START?I2C
+  +--> ?PR?_I2C_WRITE?I2C
+  +--> ?PR?I2C_DELAY?I2C
+  +--> ?PR?I2C_STOP?I2C
 
-?PR?IIC_START?IIC                -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?I2C_START?I2C              -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
-?PR?_IIC_SEND_BYTE?IIC           -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?_I2C_WRITE?I2C             -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
-?PR?IIC_STOP?IIC                 -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?I2C_STOP?I2C               -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
-?PR?_IIC_RECEIVE_STR?IIC         0010H    0007H
-  +--> ?PR?IIC_START?IIC
-  +--> ?PR?_IIC_SEND_BYTE?IIC
-  +--> ?PR?IIC_RECEIVE_BYTE?IIC
-  +--> ?PR?IIC_ACK?IIC
-  +--> ?PR?IIC_NOACK?IIC
-  +--> ?PR?IIC_STOP?IIC
+?PR?_I2C_READ_STR?I2C          0018H    0007H
+  +--> ?PR?I2C_START?I2C
+  +--> ?PR?_I2C_WRITE?I2C
+  +--> ?PR?I2C_READ?I2C
+  +--> ?PR?I2C_ACK?I2C
+  +--> ?PR?I2C_NOACK?I2C
+  +--> ?PR?I2C_STOP?I2C
 
-?PR?IIC_RECEIVE_BYTE?IIC         -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?I2C_READ?I2C               -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
-?PR?IIC_ACK?IIC                  -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?I2C_ACK?I2C                -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
-?PR?IIC_NOACK?IIC                -----    -----
-  +--> ?PR?IIC_DELAY?IIC
+?PR?I2C_NOACK?I2C              -----    -----
+  +--> ?PR?I2C_DELAY?I2C
 
 
 
@@ -119,10 +118,10 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   D:00F0H         SYMBOL        B
   D:0083H         SYMBOL        DPH
   D:0082H         SYMBOL        DPL
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 3
-
-
   N:0000H         SYMBOL        IBPSTACK
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 3
+
+
   N:0100H         SYMBOL        IBPSTACKTOP
   N:0080H         SYMBOL        IDATALEN
   C:0292H         SYMBOL        IDATALOOP
@@ -152,7 +151,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:0000H         SYMBOL        _ICE_DUMMY_
   D:00A0H         PUBLIC        P2
   C:01B7H         PUBLIC        main
-  C:02BCH         SYMBOL        _?ix1000
+  C:02AFH         SYMBOL        _?ix1000
   C:024FH         PUBLIC        _delay_us
   -------         PROC          _DELAY_US
   D:0006H         SYMBOL        i
@@ -164,7 +163,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   -------         PROC          MAIN
   -------         DO            
   D:0008H         SYMBOL        rx
-  D:000CH         SYMBOL        tx
+  D:0010H         SYMBOL        tx
   -------         ENDDO         
   C:01B7H         LINE#         8
   C:01B7H         LINE#         9
@@ -176,53 +175,53 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   -------         ENDPROC       MAIN
   -------         ENDMOD        MAIN
 
-  -------         MODULE        IIC
+  -------         MODULE        I2C
   C:0000H         SYMBOL        _ICE_DUMMY_
-  C:017AH         PUBLIC        _iic_send_str
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 4
-
-
   D:00A0H         PUBLIC        P2
-  C:01F3H         PUBLIC        iic_receive_byte
-  C:02A5H         PUBLIC        iic_noack
-  C:02B6H         PUBLIC        iic_delay
+  C:0225H         PUBLIC        _i2c_write
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 4
+
+
+  C:029BH         PUBLIC        i2c_ack
+  C:0261H         PUBLIC        i2c_start
+  C:02B7H         PUBLIC        i2c_init
+  C:0282H         PUBLIC        i2c_wait
+  C:0273H         PUBLIC        i2c_stop
   B:0020H.0       PUBLIC        ack
-  C:0124H         PUBLIC        _iic_receive_str
-  C:029BH         PUBLIC        iic_ack
-  C:0261H         PUBLIC        iic_start
-  C:02AFH         PUBLIC        iic_init
-  C:0282H         PUBLIC        iic_wait
+  C:0124H         PUBLIC        _i2c_read_str
+  C:017AH         PUBLIC        _i2c_write_str
   B:00A0H.1       PUBLIC        SDA
-  C:0225H         PUBLIC        _iic_send_byte
-  C:0273H         PUBLIC        iic_stop
   B:00A0H.0       PUBLIC        SCL
-  -------         PROC          IIC_WAIT
+  C:02A5H         PUBLIC        i2c_noack
+  C:02BEH         PUBLIC        i2c_delay
+  C:01F3H         PUBLIC        i2c_read
+  -------         PROC          I2C_WAIT
   -------         DO            
-  D:0017H         SYMBOL        i
+  D:001FH         SYMBOL        i
   -------         ENDDO         
   C:0282H         LINE#         13
   C:0282H         LINE#         14
   C:0282H         LINE#         16
   C:028EH         LINE#         17
-  -------         ENDPROC       IIC_WAIT
-  -------         PROC          IIC_DELAY
-  C:02B6H         LINE#         19
-  C:02B6H         LINE#         20
-  C:02B6H         LINE#         21
-  C:02B7H         LINE#         22
-  C:02B8H         LINE#         23
-  C:02B9H         LINE#         24
-  C:02BAH         LINE#         25
-  C:02BBH         LINE#         26
-  -------         ENDPROC       IIC_DELAY
-  -------         PROC          IIC_INIT
-  C:02AFH         LINE#         28
-  C:02AFH         LINE#         29
-  C:02AFH         LINE#         30
-  C:02B1H         LINE#         31
-  C:02B3H         LINE#         32
-  -------         ENDPROC       IIC_INIT
-  -------         PROC          IIC_START
+  -------         ENDPROC       I2C_WAIT
+  -------         PROC          I2C_DELAY
+  C:02BEH         LINE#         19
+  C:02BEH         LINE#         20
+  C:02BEH         LINE#         21
+  C:02BFH         LINE#         22
+  C:02C0H         LINE#         23
+  C:02C1H         LINE#         24
+  C:02C2H         LINE#         25
+  C:02C3H         LINE#         26
+  -------         ENDPROC       I2C_DELAY
+  -------         PROC          I2C_INIT
+  C:02B7H         LINE#         28
+  C:02B7H         LINE#         29
+  C:02B7H         LINE#         30
+  C:02B9H         LINE#         31
+  C:02BBH         LINE#         32
+  -------         ENDPROC       I2C_INIT
+  -------         PROC          I2C_START
   C:0261H         LINE#         38
   C:0261H         LINE#         39
   C:0261H         LINE#         40
@@ -233,21 +232,21 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:026DH         LINE#         45
   C:0270H         LINE#         46
   C:0272H         LINE#         47
-  -------         ENDPROC       IIC_START
-  -------         PROC          IIC_STOP
+  -------         ENDPROC       I2C_START
+  -------         PROC          I2C_STOP
   C:0273H         LINE#         52
   C:0273H         LINE#         53
   C:0273H         LINE#         54
   C:0275H         LINE#         55
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 5
-
-
   C:0278H         LINE#         56
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 5
+
+
   C:027AH         LINE#         57
   C:027DH         LINE#         58
   C:027FH         LINE#         59
-  -------         ENDPROC       IIC_STOP
-  -------         PROC          _IIC_SEND_BYTE
+  -------         ENDPROC       I2C_STOP
+  -------         PROC          _I2C_WRITE
   D:0007H         SYMBOL        byte
   -------         DO            
   D:0006H         SYMBOL        i
@@ -275,8 +274,8 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:024AH         LINE#         95
   C:024CH         LINE#         96
   C:024EH         LINE#         97
-  -------         ENDPROC       _IIC_SEND_BYTE
-  -------         PROC          IIC_RECEIVE_BYTE
+  -------         ENDPROC       _I2C_WRITE
+  -------         PROC          I2C_READ
   -------         DO            
   D:0005H         SYMBOL        i
   D:0007H         SYMBOL        a
@@ -299,16 +298,16 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:0206H         LINE#         124
   C:0208H         LINE#         125
   C:0208H         LINE#         127
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 6
-
-
   C:0219H         LINE#         128
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 6
+
+
   C:021CH         LINE#         129
   C:0220H         LINE#         130
   C:0222H         LINE#         131
   C:0224H         LINE#         132
-  -------         ENDPROC       IIC_RECEIVE_BYTE
-  -------         PROC          IIC_ACK
+  -------         ENDPROC       I2C_READ
+  -------         PROC          I2C_ACK
   C:029BH         LINE#         137
   C:029BH         LINE#         138
   C:029BH         LINE#         139
@@ -316,8 +315,8 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:029FH         LINE#         141
   C:02A2H         LINE#         142
   C:02A4H         LINE#         143
-  -------         ENDPROC       IIC_ACK
-  -------         PROC          IIC_NOACK
+  -------         ENDPROC       I2C_ACK
+  -------         PROC          I2C_NOACK
   C:02A5H         LINE#         148
   C:02A5H         LINE#         149
   C:02A5H         LINE#         150
@@ -325,12 +324,12 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:02A9H         LINE#         152
   C:02ACH         LINE#         153
   C:02AEH         LINE#         154
-  -------         ENDPROC       IIC_NOACK
-  -------         PROC          _IIC_SEND_STR
+  -------         ENDPROC       I2C_NOACK
+  -------         PROC          _I2C_WRITE_STR
   D:0006H         SYMBOL        addr
   D:0005H         SYMBOL        pos
   D:0001H         SYMBOL        str
-  D:0015H         SYMBOL        len
+  D:001DH         SYMBOL        len
   -------         DO            
   D:0005H         SYMBOL        i
   -------         ENDDO         
@@ -359,18 +358,18 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:01AFH         LINE#         193
   C:01B2H         LINE#         195
   C:01B5H         LINE#         196
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 7
-
-
   C:01B6H         LINE#         197
-  -------         ENDPROC       _IIC_SEND_STR
-  -------         PROC          _IIC_RECEIVE_STR
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 7
+
+
+  -------         ENDPROC       _I2C_WRITE_STR
+  -------         PROC          _I2C_READ_STR
   D:0004H         SYMBOL        addr
   D:0005H         SYMBOL        pos
   D:0001H         SYMBOL        str
-  D:0015H         SYMBOL        len
+  D:001DH         SYMBOL        len
   -------         DO            
-  D:0016H         SYMBOL        i
+  D:001EH         SYMBOL        i
   -------         ENDDO         
   C:0124H         LINE#         207
   C:0126H         LINE#         208
@@ -402,8 +401,8 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   C:0175H         LINE#         241
   C:0178H         LINE#         242
   C:0179H         LINE#         243
-  -------         ENDPROC       _IIC_RECEIVE_STR
-  -------         ENDMOD        IIC
+  -------         ENDPROC       _I2C_READ_STR
+  -------         ENDMOD        I2C
 
   -------         MODULE        ?C?COPY
   C:00D3H         PUBLIC        ?C?COPY
@@ -418,13 +417,13 @@ SYMBOL TABLE OF MODULE:  .\Objects\I2C_AT24C08 (?C_STARTUP)
   -------         ENDMOD        ?C?CSTPTR
 
 *** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
-    SEGMENT: ?PR?IIC_WAIT?IIC
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  13:43:58  PAGE 8
+    SEGMENT: ?PR?I2C_WAIT?I2C
 
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  14:22:49  PAGE 8
 
 
 *** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
-    SEGMENT: ?PR?IIC_INIT?IIC
+    SEGMENT: ?PR?I2C_INIT?I2C
 
-Program Size: data=25.1 xdata=0 code=704
+Program Size: data=33.1 xdata=0 code=708
 LINK/LOCATE RUN COMPLETE.  2 WARNING(S),  0 ERROR(S)
