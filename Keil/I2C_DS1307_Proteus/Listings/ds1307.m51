@@ -1,9 +1,9 @@
-BL51 BANKED LINKER/LOCATER V6.22                                                        08/04/2017  16:23:19  PAGE 1
+BL51 BANKED LINKER/LOCATER V6.22                                                        08/04/2017  16:37:50  PAGE 1
 
 
 BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
-C:\KEIL\ARM\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, ..\libs\i2c\Objects\libi2c.LIB, .\Objects\ds1307
->> .obj TO .\Objects\ds1307 PRINT (.\Listings\ds1307.m51) RAMSIZE (256)
+C:\KEIL\ARM\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, ..\libs\ds1307\Objects\libds1307.LIB TO .\Object
+>> s\ds1307 PRINT (.\Listings\ds1307.m51) RAMSIZE (256)
 
 
 MEMORY MODEL: SMALL
@@ -12,8 +12,8 @@ MEMORY MODEL: SMALL
 INPUT MODULES INCLUDED:
   .\Objects\STARTUP.obj (?C_STARTUP)
   .\Objects\main.obj (MAIN)
-  .\Objects\ds1307.obj (DS1307)
-  ..\libs\i2c\Objects\libi2c.LIB (I2C)
+  ..\libs\ds1307\Objects\libds1307.LIB (DS1307)
+  ..\libs\ds1307\Objects\libds1307.LIB (I2C)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?COPY)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?CLDPTR)
   C:\KEIL\ARM\C51\LIB\C51S.LIB (?C?CLDOPTR)
@@ -29,18 +29,15 @@ LINK MAP OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
 
             * * * * * * *   D A T A   M E M O R Y   * * * * * * *
             REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
-            DATA    0008H     000FH     UNIT         ?DT?TEST_RTC?MAIN
-            DATA    0017H     0007H     UNIT         ?DT?__DS1307_WRITE_RAW?DS1307
-            DATA    001EH     0001H     UNIT         ?DT?I2C_WAIT?I2C
-                    001FH     0001H                  *** GAP ***
+            DATA    0008H     0007H     UNIT         ?DT?_I2C_READ_STR?I2C
+            DATA    000FH     0006H     UNIT         ?DT?_I2C_WRITE_STR?I2C
+            DATA    0015H     0001H     UNIT         ?DT?I2C_WAIT?I2C
+                    0016H     000AH                  *** GAP ***
             BIT     0020H.0   0000H.1   UNIT         ?BI?I2C
                     0020H.1   0000H.7                *** GAP ***
-            DATA    0021H     0024H     UNIT         _DATA_GROUP_
-            DATA    0045H     0007H     UNIT         ?DT?_I2C_READ_STR?I2C
-            DATA    004CH     0006H     UNIT         ?DT?_I2C_WRITE_STR?I2C
-            DATA    0052H     0003H     UNIT         ?DT?_DS1307_READ?DS1307
-            DATA    0055H     0003H     UNIT         ?DT?_DS1307_WRITE?DS1307
-            IDATA   0058H     0001H     UNIT         ?STACK
+            DATA    0021H     001DH     UNIT         ?DT?TEST_ROM?MAIN
+            DATA    003EH     0019H     UNIT         _DATA_GROUP_
+            IDATA   0057H     0001H     UNIT         ?STACK
 
             * * * * * * *   C O D E   M E M O R Y   * * * * * * *
             CODE    0000H     0003H     ABSOLUTE     
@@ -59,12 +56,12 @@ LINK MAP OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
             CODE    04CBH     001BH     UNIT         ?PR?_DS1307_WRITE?DS1307
             CODE    04E6H     0018H     UNIT         ?PR?DS1307_INIT?DS1307
             CODE    04FEH     0012H     UNIT         ?PR?_BCD2BIN?DS1307
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 2
-
-
             CODE    0510H     0012H     UNIT         ?PR?I2C_START?I2C
             CODE    0522H     0010H     UNIT         ?PR?_BIN2BCD?DS1307
             CODE    0532H     000FH     UNIT         ?PR?I2C_STOP?I2C
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 2
+
+
             CODE    0541H     000DH     UNIT         ?CO?MAIN
             CODE    054EH     000DH     UNIT         ?PR?I2C_WAIT?I2C
             CODE    055BH     000CH     UNIT         ?C_C51STARTUP
@@ -88,28 +85,57 @@ SEGMENT                                 DATA_GROUP
   +--> ?PR?MAIN?MAIN
 
 ?PR?MAIN?MAIN                         -----    -----
-  +--> ?PR?TEST_ROM?MAIN
+  +--> ?PR?TEST_RTC?MAIN
 
-?PR?TEST_ROM?MAIN                     0021H    001DH
-  +--> ?CO?MAIN
-  +--> ?PR?_DS1307_READ_ROM?DS1307
+?PR?TEST_RTC?MAIN                     003EH    000FH
+  +--> ?PR?DS1307_INIT?DS1307
+  +--> ?PR?_DS1307_WRITE?DS1307
+  +--> ?PR?_DS1307_READ?DS1307
 
-?PR?_DS1307_READ_ROM?DS1307           -----    -----
+?PR?DS1307_INIT?DS1307                -----    -----
+  +--> ?PR?I2C_INIT?I2C
+  +--> ?PR?I2C_START?I2C
+  +--> ?PR?_I2C_WRITE?I2C
+  +--> ?PR?I2C_STOP?I2C
+
+?PR?I2C_INIT?I2C                      -----    -----
+  +--> ?PR?I2C_DELAY?I2C
+
+?PR?I2C_START?I2C                     -----    -----
+  +--> ?PR?I2C_DELAY?I2C
+
+?PR?_I2C_WRITE?I2C                    -----    -----
+  +--> ?PR?I2C_DELAY?I2C
+
+?PR?I2C_STOP?I2C                      -----    -----
+  +--> ?PR?I2C_DELAY?I2C
+
+?PR?_DS1307_WRITE?DS1307              004DH    0003H
+  +--> ?PR?_FILL_BUFFER?DS1307
+  +--> ?PR?__DS1307_WRITE_RAW?DS1307
+
+?PR?_FILL_BUFFER?DS1307               -----    -----
+  +--> ?PR?_BIN2BCD?DS1307
+
+?PR?__DS1307_WRITE_RAW?DS1307         0050H    0007H
+  +--> ?PR?_I2C_WRITE?I2C
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 3
+
+
+  +--> ?PR?I2C_START?I2C
+  +--> ?PR?I2C_STOP?I2C
+
+?PR?_DS1307_READ?DS1307               004DH    0003H
   +--> ?PR?__DS1307_READ_RAW?DS1307
+  +--> ?PR?_BCD2BIN?DS1307
 
-?PR?__DS1307_READ_RAW?DS1307          003EH    0007H
+?PR?__DS1307_READ_RAW?DS1307          0050H    0007H
   +--> ?PR?_I2C_WRITE?I2C
   +--> ?PR?I2C_START?I2C
   +--> ?PR?I2C_READ?I2C
   +--> ?PR?I2C_ACK?I2C
   +--> ?PR?I2C_NOACK?I2C
   +--> ?PR?I2C_STOP?I2C
-
-?PR?_I2C_WRITE?I2C                    -----    -----
-  +--> ?PR?I2C_DELAY?I2C
-
-?PR?I2C_START?I2C                     -----    -----
-  +--> ?PR?I2C_DELAY?I2C
 
 ?PR?I2C_READ?I2C                      -----    -----
   +--> ?PR?I2C_DELAY?I2C
@@ -118,12 +144,6 @@ SEGMENT                                 DATA_GROUP
   +--> ?PR?I2C_DELAY?I2C
 
 ?PR?I2C_NOACK?I2C                     -----    -----
-  +--> ?PR?I2C_DELAY?I2C
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 3
-
-
-
-?PR?I2C_STOP?I2C                      -----    -----
   +--> ?PR?I2C_DELAY?I2C
 
 
@@ -135,7 +155,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
 
   -------         MODULE        ?C_STARTUP
   C:055BH         SEGMENT       ?C_C51STARTUP
-  I:0058H         SEGMENT       ?STACK
+  I:0057H         SEGMENT       ?STACK
   C:0000H         PUBLIC        ?C_STARTUP
   D:00E0H         SYMBOL        ACC
   D:00F0H         SYMBOL        B
@@ -159,6 +179,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   N:0000H         SYMBOL        XDATALEN
   N:0000H         SYMBOL        XDATASTART
   C:0000H         LINE#         126
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 4
+
+
   C:055BH         LINE#         133
   C:055DH         LINE#         134
   C:055EH         LINE#         135
@@ -176,12 +199,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:048BH         PUBLIC        test_rom
   -------         PROC          TEST_RTC
   -------         DO            
-  D:0008H         SYMBOL        rtc
+  D:003EH         SYMBOL        rtc
   -------         ENDDO         
   C:0434H         LINE#         5
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 4
-
-
   C:0434H         LINE#         6
   C:0434H         LINE#         8
   C:0437H         LINE#         9
@@ -219,6 +239,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:02C8H         SYMBOL        _fill_buffer
   C:0526H         SYMBOL        _bin2bcd
   C:0502H         SYMBOL        _bcd2bin
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 5
+
+
   C:0173H         PUBLIC        _ds1307_read
   C:025CH         PUBLIC        __ds1307_read_raw
   C:04CBH         PUBLIC        _ds1307_write
@@ -239,9 +262,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   -------         PROC          L?0041
   -------         ENDPROC       L?0041
   C:0522H         SYMBOL        L?0042
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 5
-
-
   -------         PROC          _BIN2BCD
   D:0007H         SYMBOL        val
   C:0526H         LINE#         4
@@ -279,8 +299,11 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:04F6H         LINE#         30
   C:04FBH         LINE#         31
   -------         ENDPROC       DS1307_INIT
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 6
+
+
   -------         PROC          _DS1307_READ
-  D:0052H         SYMBOL        rtc
+  D:004DH         SYMBOL        rtc
   -------         DO            
   D:0007H         SYMBOL        temp
   -------         ENDDO         
@@ -299,9 +322,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:01EBH         LINE#         48
   C:01EBH         LINE#         49
   C:01EDH         LINE#         50
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 6
-
-
   C:01FAH         LINE#         51
   C:020AH         LINE#         52
   C:020AH         LINE#         53
@@ -310,7 +330,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0249H         LINE#         56
   -------         ENDPROC       _DS1307_READ
   -------         PROC          _DS1307_WRITE
-  D:0055H         SYMBOL        rtc
+  D:004DH         SYMBOL        rtc
   C:04CBH         LINE#         59
   C:04D1H         LINE#         60
   C:04D1H         LINE#         61
@@ -333,12 +353,15 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0570H         LINE#         73
   -------         ENDPROC       _DS1307_WRITE_ROM
   -------         PROC          __DS1307_READ_RAW
-  D:003EH         SYMBOL        addr
-  D:003FH         SYMBOL        buf
-  D:0042H         SYMBOL        len
+  D:0050H         SYMBOL        addr
+  D:0051H         SYMBOL        buf
+  D:0054H         SYMBOL        len
   -------         DO            
-  D:0044H         SYMBOL        i
+  D:0056H         SYMBOL        i
   -------         ENDDO         
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 7
+
+
   C:025CH         LINE#         75
   C:0264H         LINE#         76
   C:0264H         LINE#         78
@@ -358,14 +381,11 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:02C5H         LINE#         92
   -------         ENDPROC       __DS1307_READ_RAW
   -------         PROC          __DS1307_WRITE_RAW
-  D:0017H         SYMBOL        addr
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 7
-
-
-  D:0018H         SYMBOL        buf
-  D:001BH         SYMBOL        len
+  D:0050H         SYMBOL        addr
+  D:0051H         SYMBOL        buf
+  D:0054H         SYMBOL        len
   -------         DO            
-  D:001DH         SYMBOL        i
+  D:0056H         SYMBOL        i
   -------         ENDDO         
   C:0376H         LINE#         95
   C:037EH         LINE#         96
@@ -399,6 +419,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   B:0020H.0       PUBLIC        ack
   C:0320H         PUBLIC        _i2c_read_str
   C:03C5H         PUBLIC        _i2c_write_str
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 8
+
+
   B:00A0H.1       PUBLIC        SDA
   B:00A0H.0       PUBLIC        SCL
   C:057BH         PUBLIC        i2c_noack
@@ -406,7 +429,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0402H         PUBLIC        i2c_read
   -------         PROC          I2C_WAIT
   -------         DO            
-  D:001EH         SYMBOL        i
+  D:0015H         SYMBOL        i
   -------         ENDDO         
   C:054EH         LINE#         13
   C:054EH         LINE#         14
@@ -419,9 +442,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0595H         LINE#         21
   C:0596H         LINE#         22
   C:0597H         LINE#         23
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 8
-
-
   C:0598H         LINE#         24
   C:0599H         LINE#         25
   C:059AH         LINE#         26
@@ -459,6 +479,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   D:0007H         SYMBOL        byte
   -------         DO            
   D:0006H         SYMBOL        i
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 9
+
+
   -------         ENDDO         
   C:0461H         LINE#         69
   C:0461H         LINE#         70
@@ -479,9 +502,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0482H         LINE#         89
   C:0484H         LINE#         91
   C:0484H         LINE#         92
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 9
-
-
   C:0486H         LINE#         93
   C:0486H         LINE#         95
   C:0488H         LINE#         96
@@ -519,6 +539,9 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   -------         PROC          I2C_ACK
   C:0571H         LINE#         137
   C:0571H         LINE#         138
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 10
+
+
   C:0571H         LINE#         139
   C:0573H         LINE#         140
   C:0575H         LINE#         141
@@ -538,10 +561,7 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   D:0006H         SYMBOL        addr
   D:0005H         SYMBOL        pos
   D:0001H         SYMBOL        str
-  D:0051H         SYMBOL        len
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 10
-
-
+  D:0014H         SYMBOL        len
   -------         DO            
   D:0005H         SYMBOL        i
   -------         ENDDO         
@@ -576,9 +596,12 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   D:0004H         SYMBOL        addr
   D:0005H         SYMBOL        pos
   D:0001H         SYMBOL        str
-  D:004AH         SYMBOL        len
+  D:000DH         SYMBOL        len
   -------         DO            
-  D:004BH         SYMBOL        i
+  D:000EH         SYMBOL        i
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 11
+
+
   -------         ENDDO         
   C:0320H         LINE#         207
   C:0322H         LINE#         208
@@ -599,9 +622,6 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   C:0343H         LINE#         228
   C:0343H         LINE#         229
   C:0345H         LINE#         230
-BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:23:19  PAGE 11
-
-
   C:0345H         LINE#         232
   C:0352H         LINE#         233
   C:0352H         LINE#         234
@@ -637,7 +657,10 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
   -------         ENDMOD        ?C?CSTOPTR
 
 *** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
-    SEGMENT: ?PR?TEST_RTC?MAIN
+    SEGMENT: ?PR?TEST_ROM?MAIN
+
+BL51 BANKED LINKER/LOCATER V6.22                                                      08/04/2017  16:37:50  PAGE 12
+
 
 *** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
     SEGMENT: ?PR?_DS1307_DELAY_MS?DS1307
@@ -654,5 +677,5 @@ SYMBOL TABLE OF MODULE:  .\Objects\ds1307 (?C_STARTUP)
 *** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
     SEGMENT: ?PR?_I2C_READ_STR?I2C
 
-Program Size: data=87.1 xdata=0 code=1440
+Program Size: data=77.1 xdata=0 code=1440
 LINK/LOCATE RUN COMPLETE.  6 WARNING(S),  0 ERROR(S)

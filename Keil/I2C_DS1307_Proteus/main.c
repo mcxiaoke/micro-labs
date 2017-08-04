@@ -1,4 +1,4 @@
-#include "ds1307.h"
+#include "../libs/ds1307/ds1307.h"
 
 #define ADDR 0xd0
 
@@ -29,6 +29,6 @@ void  test_rom()
 
 void main()
 { 
-    test_rom();
+    test_rtc();
     while(1);
 }

@@ -1,7 +1,7 @@
 #ifndef _DS1307_H_
 #define _DS1307_H_
 
-#include "../libs/i2c/i2c.h"
+#include "../i2c/i2c.h"
 
 #define DS1307_DEVICE_ID 0xd0
 #define DS1307_MODE_WRITE 0xd0
