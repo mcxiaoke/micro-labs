@@ -1,4 +1,5 @@
 #include<reg51.h>
+#include "lcd1602.h"
 
 /* Configure the data bus and Control pins as per the hardware connection
    Databus is connected to P2_0:P2_7 and control bus P0_0:P0_2*/
@@ -8,10 +9,17 @@ sbit LCD_RW = P3^1;
 sbit LCD_EN = P3^2;
 
 /* local function to generate delay */
-void delay_us(int cnt)
+static void delay_us(int cnt)
 {
     int i;
     for(i=0;i<cnt;i++);
+}
+
+static void delay_ms(int i)
+{
+    int k;
+    for(;i>0;i--)
+        for(k=110;k>0;k--);
 }
 
 /* Function to send the command to LCD */
@@ -38,7 +46,18 @@ void Lcd_DataWrite( char dat)
     delay_us(1000);
 }
 
-int main()
+void main()
+{
+    unsigned char i;
+    lcd_init();
+    // all: 00h-27h displayed:00h-0fh
+    lcd_display_string(0,20,"Hello 1602!");
+    lcd_display_string(1,20,"2017-06-30 16:30");
+    lcd_move_right(60);
+    while(1);
+}
+
+void main0()
 {
     char i,a[]={"Good morning!"};
 
