@@ -146,6 +146,20 @@ void wait() {
   digitalWrite(BACK_LEFT_2, HIGH);
 }
 
+void left_wait() {
+  digitalWrite(FRONT_LEFT_1, HIGH);
+  digitalWrite(FRONT_LEFT_2, HIGH);
+  digitalWrite(BACK_LEFT_1, HIGH);
+  digitalWrite(BACK_LEFT_2, HIGH);
+}
+
+void right_wait() {
+  digitalWrite(FRONT_RIGHT_1, HIGH);
+  digitalWrite(FRONT_RIGHT_2, HIGH);
+  digitalWrite(BACK_RIGHT_1, HIGH);
+  digitalWrite(BACK_RIGHT_2, HIGH);
+}
+
 void test() {
   digitalWrite(FRONT_RIGHT_1, HIGH);
   digitalWrite(FRONT_RIGHT_2, LOW);
@@ -289,6 +303,23 @@ void rightBack() {
   right(TURN_DURATION * 2);
 }
 
+
+void leftM(int duration) {
+  moveUp(FRONT_RIGHT);
+  moveUp(BACK_RIGHT);
+  moveDown(FRONT_LEFT);
+  moveDown(BACK_LEFT);
+  delay(duration);
+}
+
+void rightM(int duration) {
+  moveUp(FRONT_LEFT);
+  moveUp(BACK_LEFT);
+  moveDown(FRONT_RIGHT);
+  moveDown(BACK_RIGHT);
+  delay(duration);
+}
+
 //void parseCommand() {
 //  if (irrecv.decode(&results)) {
 //    Serial.println(results.value, HEX);
@@ -406,18 +437,48 @@ void parseBleCommand() {
   bleStr = "";
 }
 
-void executeCommand() {
+void manualExecute() {
   switch (nextCommand) {
     case GO_UP:
       up(MOVE_DURATION);
       break;
     case GO_LEFT:
+      leftM(MOVE_DURATION / 2);
+      break;
+    case GO_RIGHT:
+      rightM(MOVE_DURATION / 2);
+      break;
+    case GO_DOWN:
+      down(MOVE_DURATION);
+      break;
+    case GO_SLEFT:
+      leftM(MOVE_DURATION / 2);
+      break;
+    case GO_SRIGHT:
+      rightM(MOVE_DURATION / 2);
+      break;
+    case STOP:
+      wait();
+      break;
+    default:
+      break;
+  }
+  nextCommand = STOP;
+}
+
+void autoExecute() {
+  switch (nextCommand) {
+    case GO_UP:
+      up(MOVE_DURATION);
+      nextCommand = GO_UP;
+      break;
+    case GO_LEFT:
       left(TURN_DURATION);
-      nextCommand = autoMode ? GO_UP : STOP;
+      nextCommand = GO_UP;
       break;
     case GO_RIGHT:
       right(TURN_DURATION);
-      nextCommand = autoMode ? GO_UP : STOP;
+      nextCommand = GO_UP;
       break;
     case GO_DOWN:
       down(TURN_DURATION);
@@ -433,11 +494,11 @@ void executeCommand() {
       break;
     case GO_LBACK:
       leftBack();
-      nextCommand = autoMode ? GO_UP : STOP;
+      nextCommand = GO_UP;
       break;
     case GO_RBACK:
       rightBack();
-      nextCommand = autoMode ? GO_UP : STOP;
+      nextCommand = GO_UP;
       break;
     case STOP:
       wait();
@@ -473,26 +534,23 @@ void checkBarrier() {
   }
   float distance = getDistance();
   if (distance <= maxDistance) {
-    if (autoMode) {
-      wait();
-      delay(MOVE_DURATION);
-      down(MOVE_DURATION);
-      if (nextLeft) {
-        left(TURN_DURATION);
-      } else {
-        right(TURN_DURATION);
-      }
+    wait();
+    delay(MOVE_DURATION);
+    down(MOVE_DURATION);
+    if (nextLeft) {
+      left(TURN_DURATION);
     } else {
-      wait();
-      delay(MOVE_DURATION);
-      nextCommand = STOP;
+      right(TURN_DURATION);
     }
-
   }
 }
 
 void loop() {
   parseBleCommand();
-  executeCommand();
-  checkBarrier();
+  if (autoMode) {
+    autoExecute();
+    checkBarrier();
+  } else {
+    manualExecute();
+  }
 }
