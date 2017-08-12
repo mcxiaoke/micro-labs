@@ -413,11 +413,11 @@ void executeCommand() {
       break;
     case GO_LEFT:
       left(TURN_DURATION);
-      nextCommand = GO_UP;
+      nextCommand = autoMode ? GO_UP : STOP;
       break;
     case GO_RIGHT:
       right(TURN_DURATION);
-      nextCommand = GO_UP;
+      nextCommand = autoMode ? GO_UP : STOP;
       break;
     case GO_DOWN:
       down(TURN_DURATION);
@@ -433,11 +433,11 @@ void executeCommand() {
       break;
     case GO_LBACK:
       leftBack();
-      nextCommand = GO_UP;
+      nextCommand = autoMode ? GO_UP : STOP;
       break;
     case GO_RBACK:
       rightBack();
-      nextCommand = GO_UP;
+      nextCommand = autoMode ? GO_UP : STOP;
       break;
     case STOP:
       wait();
