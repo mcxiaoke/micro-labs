@@ -5,8 +5,11 @@
 *.tmp
 *.obj
 *.hex
+*.elf
+*.bin
+build
 .DS_Store
-Objects/
+Objects
 Backup Of *
 config.h
 .vscode
