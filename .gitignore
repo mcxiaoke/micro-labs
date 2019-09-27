@@ -5,7 +5,8 @@
 *.tmp
 *.obj
 *.hex
-*.miu
 .DS_Store
 Objects/
 Backup Of *
+config.h
+.vscode

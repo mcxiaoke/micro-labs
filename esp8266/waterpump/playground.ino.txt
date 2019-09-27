@@ -1,0 +1,272 @@
+#include <FS.h>
+#include <Blynk.h>
+#include <BlynkSimpleEsp8266.h>
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecureBearSSL.h>
+#include <WiFiUdp.h>
+#include <TimeLib.h>
+#include <NTPClient.h>
+#include <ESP8266HTTPClient.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266WebServer.h>
+#include "internal.h"
+#include "config.h"
+#include "net.h"
+
+int ledPin = 2;   //d4 LED_BUILTIN
+int relayPin = 4; //d2
+BlynkTimer timer;
+// libraries/ESP8266WiFi/src/ESP8266WiFiType.h
+WiFiEventHandler wh1, wh2, wh3;
+
+const char *ntpServer = "ntp.ntsc.ac.cn";
+WiFiUDP ntpUDP;
+NTPClient ntp(ntpUDP, ntpServer, 3600L * 8, 60L * 1000);
+
+ESP8266WebServer server(80);
+
+void handleRoot();
+void handleNotFound();
+void handleLED();
+void handleRelay();
+
+void ntpSetup()
+{
+    ntp.begin();
+}
+
+void ntpUpdate()
+{
+    ntp.update();
+    Serial.print("[NTP] Current Time:");
+    Serial.print(ntp.getFormattedTime());
+    Serial.print(", Epoch Time:");
+    Serial.print(ntp.getEpochTime());
+    Serial.print(", Millis Time: ");
+    Serial.println(millis() / 1000);
+}
+
+void statusReport()
+{
+    static int srCount = 0;
+    String data = "text=";
+    data += urlencode("ESP8266-Status-Report-");
+    data += (++srCount);
+    data += "&desp=";
+    data += urlencode("ESP8266 is Online");
+    data += urlencode(", Current Time: ");
+    data += urlencode(ntp.getFormattedTime());
+    data += urlencode(", Up Time: ");
+    data += millis() / 1000;
+    data += urlencode("s, Timestamp: ");
+    data += ntp.getEpochTime() - 3600L * 8;
+    data += urlencode(", IP:");
+    data += urlencode(WiFi.localIP().toString());
+    data += urlencode(" (No.");
+    data += srCount;
+    data += ")";
+    httpsPost(reportUrl, data);
+    Serial.printf("No.%d Status Report is sent to server.\n", srCount);
+}
+
+void onWiFiConnected(const WiFiEventStationModeConnected &evt)
+{
+    digitalWrite(ledPin, LOW);
+    Serial.print("[WiFi] connected to ");
+    Serial.println(evt.ssid);
+}
+
+void onWiFiDisconnected(const WiFiEventStationModeDisconnected &evt)
+{
+    digitalWrite(ledPin, HIGH);
+    Serial.print("[WiFi] disconnected from ");
+    Serial.println(evt.ssid);
+}
+
+void onWiFiGotIP(const WiFiEventStationModeGotIP &evt)
+{
+    digitalWrite(ledPin, LOW);
+    Serial.print("[WiFi] got ip: ");
+    Serial.println(evt.ip);
+}
+
+void handleRoot()
+{
+    String body = "<!doctype html>\n";
+    body += "<html lang=\"en\">\n";
+    body += "<head>\n";
+    body += "<meta charset=\"utf-8\">\n";
+    body += "<meta name=\"viewport\" content=\"width=device-width\">\n";
+    body += "<title>ESP8266 Server</title></head>\n<body>\n";
+    bool ledOn = digitalRead(ledPin) == 1;
+    bool relayOn = digitalRead(relayPin) == 1;
+    body += "<h1>ESP8266 Server</h1>\n";
+    body += "<p></p>\n";
+    body += "<p>LED: ";
+    body += ledOn ? "On" : "Off";
+    body += "</p>\n<p>";
+    body += "Relay: ";
+    body += relayOn ? "On" : "Off";
+    body += "</p>\n";
+    body += "<form action=\"/led\" method=\"POST\">\n";
+    body += "<input type=\"submit\" value=\"Toggle LED\"></form>\n";
+    body += "<form action=\"/relay\" method=\"POST\">\n";
+    body += "<input type=\"submit\" value=\"Toggle Relay\"></form>\n";
+    body += "</body>\n</html>\n";
+    server.send(200, "text/html", body);
+}
+
+void handleNotFound()
+{
+    Serial.println("[Server] handleNotFound");
+    server.send(404, "text/plain", "404: Not found");
+}
+
+void handleLED()
+{
+    Serial.println("[Server] handleLED");
+    // If a POST request is made to URI /LED
+    digitalWrite(ledPin, !digitalRead(ledPin)); // Change the state of the LED
+    server.sendHeader("Location", "/");
+    server.send(303);
+}
+
+void handleRelay()
+{
+    Serial.println("[Server] handleRelay");
+    digitalWrite(relayPin, !digitalRead(relayPin)); // Change the state of the Relay
+    server.sendHeader("Location", "/");
+    server.send(303);
+}
+
+void setupServer()
+{
+    if (MDNS.begin("esp8266"))
+    { // Start the mDNS responder for esp8266.local
+        Serial.println("[Server] mDNS responder started");
+    }
+    else
+    {
+        Serial.println("[Server] Error setting up MDNS responder!");
+    }
+    server.on("/", handleRoot);
+    server.on("/led", HTTP_POST, handleLED);
+    server.on("/relay", HTTP_POST, handleRelay);
+    //  server.onNotFound(handleNotFound);
+    server.onNotFound([]() {
+        server.send(404, "text/plain", "404: Not found");
+    });
+    server.begin();
+    Serial.println("[Server] HTTP server started");
+}
+
+void setupWiFi()
+{
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, pass);
+    WiFi.setAutoReconnect(true);
+    wh1 = WiFi.onStationModeConnected(&onWiFiConnected);
+    wh2 = WiFi.onStationModeDisconnected(&onWiFiDisconnected);
+    wh3 = WiFi.onStationModeGotIP(&onWiFiGotIP);
+    Serial.print("[WiFi] Connecting");
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(500);
+        Serial.print(".");
+    }
+    //If connection successful show IP address in serial monitor
+    Serial.println("");
+    Serial.print("[WiFi] Connected to ");
+    Serial.println(ssid);
+    Serial.print("[WiFi] IP address: ");
+    Serial.println(WiFi.localIP()); //IP address assigned to your ESP
+    Serial.print("[WiFi] Hostname: ");
+    Serial.println(WiFi.hostname());
+}
+
+BLYNK_WRITE(V0) //Button Widget is writing to pin V0
+{
+    int v = param.asInt();
+    Serial.printf("[Blynk] value %d received at V0\n", v);
+    if (v == 0)
+    {
+        digitalWrite(ledPin, HIGH);
+    }
+    else
+    {
+        digitalWrite(ledPin, LOW);
+    }
+}
+
+BLYNK_CONNECTED()
+{
+    Serial.println("[Blynk] Connected!");
+    Blynk.syncAll();
+}
+
+BLYNK_APP_CONNECTED()
+{
+    Serial.println("[Blynk] App Connected!");
+}
+
+BLYNK_APP_DISCONNECTED()
+{
+    Serial.println("[Blynk] App Disconnected!");
+}
+
+void checkWiFi()
+{
+    Serial.print("[WiFi] Status: ");
+    Serial.print(WiFi.status());
+    Serial.print(", IP: ");
+    Serial.println(WiFi.localIP());
+    if (!WiFi.isConnected())
+    {
+        Serial.println("[WiFi] connection lost, reconnecting...");
+        WiFi.reconnect();
+    }
+    else
+    {
+        // statusReport();
+    }
+}
+
+void pump()
+{
+}
+
+void setup()
+{
+    // Debug console
+    Serial.begin(115200);
+    delay(100);
+    Serial.setDebugOutput(false);
+    Serial.println("\r\n");
+    Serial.println("ESP8266 Board is booting...");
+
+    pinMode(ledPin, OUTPUT);
+    pinMode(relayPin, OUTPUT);
+
+    setupWiFi();
+    setupServer();
+    ntpSetup();
+    Blynk.begin(blynkAuth, ssid, pass);
+    // You can also specify server:
+    //Blynk.begin(auth, ssid, pass, "blynk-cloud.com", 80);
+    //Blynk.begin(auth, ssid, pass, IPAddress(192,168,1,100), 8080);
+    ntpUpdate();
+    statusReport();
+    timer.setInterval(15 * 1000L, checkWiFi);
+    timer.setInterval(60 * 1000L, ntpUpdate);
+    timer.setInterval(5 * 60 * 1000L, statusReport);
+}
+
+void loop()
+{
+    Blynk.run();
+    timer.run();
+    server.handleClient();
+}
