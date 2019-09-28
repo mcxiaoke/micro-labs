@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"name": "190927-102403-nodemcuv2",
+			"path": "/Users/mcxiaoke/Documents/PlatformIO/Projects/190927-102403-nodemcuv2"
+		}
+	],
+    "settings": {
+        "terminal.integrated.env.osx": {
+            "PATH": "/Users/mcxiaoke/.platformio/penv/bin:/Users/mcxiaoke/.platformio/penv:/Users/mcxiaoke/.cargo/bin:/Users/mcxiaoke/.cargo/bin:/usr/local/opt/sqlite/bin:/usr/local/opt/openssl/bin:/Users/mcxiaoke/bin:/Users/mcxiaoke/Library/Python/2.7/bin:/usr/local/bin:/usr/local/sbin:/Users/mcxiaoke/develop/gradle/bin:/Users/mcxiaoke/develop/groovy/bin:/Users/mcxiaoke/develop/tools:/Users/mcxiaoke/develop/frida:/Users/mcxiaoke/develop/android-sdk-macosx/tools:/Users/mcxiaoke/develop/android-sdk-macosx/tools/bin:/Users/mcxiaoke/develop/android-sdk-macosx/platform-tools:/Users/mcxiaoke/develop/android-sdk-macosx/build-tools/bin:/Users/mcxiaoke/develop/android-sdk-macosx/ndk-bundle:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/share/dotnet:~/.dotnet/tools:/Library/Frameworks/Mono.framework/Versions/Current/Commands",
+            "PLATFORMIO_CALLER": "vscode"
+        }
+    }
+}
