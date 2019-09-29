@@ -2,6 +2,7 @@
 #define _INTERNAL_H
 
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <FS.h>
 #include <time.h>
 
@@ -17,6 +18,9 @@ String nowString();
 String dateString();
 String timeString();
 String dateString(unsigned long ts);
+void eSetup();
+void eWriteInt(int address, int value);
+int eReadInt(int address);
 void htmlEscape(String& html);
 String URLEncode(const char* msg);
 String urldecode(String str);
@@ -59,6 +63,26 @@ String dateString(unsigned long ts) {
   sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", year(ts), month(ts), day(ts),
           hour(ts), minute(ts), second(ts));
   return String(buf);
+}
+
+void eSetup() {
+  EEPROM.begin(1024);
+}
+
+void eWriteInt(int address, int value) {
+  byte two = (value & 0xFF);
+  byte one = ((value >> 8) & 0xFF);
+
+  EEPROM.write(address, two);
+  EEPROM.write(address + 1, one);
+  EEPROM.commit();
+}
+
+int eReadInt(int address) {
+  long two = EEPROM.read(address);
+  long one = EEPROM.read(address + 1);
+
+  return ((two << 0) & 0xFFFFFF) + ((one << 8) & 0xFFFFFFFF);
 }
 
 void htmlEscape(String& html) {

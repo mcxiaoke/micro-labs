@@ -1,7 +1,5 @@
 *.pdsbak
 *.workspace
-*.htm
-*.html
 *.tmp
 *.obj
 *.hex

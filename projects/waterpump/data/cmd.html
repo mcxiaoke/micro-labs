@@ -1,0 +1,44 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Pump Server Command</title>
+    <style>
+        .content {
+            max-width: 640px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .output {
+            font-size: 80%;
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="content">
+        <h1>Pump Commands</h1>
+        <hr>
+        <form action="/cmd?action=fs_delete" method="POST">
+            <input type="text" name="fs_path">
+            <input type="submit" value="Delete File" onclick="return confirm('Are you sure to delete this file?')">
+        </form>
+        <form action="/cmd?action=fs_list" method="POST">
+            <input type="submit" value="List all files on SPIFFS Filesystem."">
+            </form>
+            <a href="/"> <button>Home</button></a>
+            <a href="/logs"><button>Refresh</button></a>
+            <hr>
+            <div class=" output">
+                %CMD_OUTPUT%
+            </div>
+    </div>
+
+</body>
+
+</html>
