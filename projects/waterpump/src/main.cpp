@@ -10,24 +10,25 @@
 #include <ESPAsyncWebServer.h>
 #include <NTPClient.h>
 #include <TimeLib.h>
+#include <WebSerial.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
-#include "config.h"
-#include "data.h"
-#include "internal.h"
-#include "net.h"
+
+#include "common/config.h"
+#include "common/data.h"
+#include "common/internal.h"
+#include "common/net.h"
 
 // https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
 
 // 1 minutes per day, 2 times, 30 seconds per one run
 // total water elapsed 12m = 720s, 720/10=72, 72/4=18
-const unsigned long PUMP_RUN_INTERVAL =
-    6 * 60 * 60 * 1000L;                             // 6 * 4 = 24 hours
-const unsigned long PUMP_RUN_DURATION = 20 * 1000L;  // 60/3=20 seconds
-const unsigned long PUMP_RUN_INTERVAL_TEST = 1 * 60 * 1000L;  // 1 minutes
-const unsigned long PUMP_RUN_DURATION_TEST = 10 * 1000L;      // 10 seconds
-const char* PUMP_LOG_FILENAME = "/file/pump.log";
+const unsigned long PUMP_RUN_INTERVAL = 8 * 3600 * 1000L;  // 8 * 3 = 24 hours
+const unsigned long PUMP_RUN_DURATION = 20 * 1000L;        // 60/3=20 seconds
+const unsigned long PUMP_RUN_INTERVAL_TEST = 60 * 1000L;   // 60 seconds
+const unsigned long PUMP_RUN_DURATION_TEST = 12 * 1000L;   // 12 seconds
+const char* PUMP_LOG_FILE = "/file/pump.log";
 
 int ledPin = 2;   // d4 LED_BUILTIN
 int pumpPin = 4;  // d2 relay
@@ -50,8 +51,9 @@ BlynkTimer timer;
 WiFiEventHandler wh1, wh2, wh3;
 
 String listFiles();
-void pumpLog(const String& text, bool);
-void pumpLog(const String& text);
+void webSerialRecv(uint8_t* data, size_t len);
+void fileLog(const String& text, bool);
+void fileLog(const String& text);
 String processor(const String& var);
 void handleNotFound(AsyncWebServerRequest* req);
 void handleRoot(AsyncWebServerRequest* req);
@@ -73,11 +75,11 @@ NTPClient ntp(ntpUDP, ntpServer, 3600L * 8, 10 * 60 * 1000L);
 AsyncWebServer server(80);
 // ESP Async Web Server End
 
-void pumpLog(const String& text) {
-  pumpLog(text, true);
+void fileLog(const String& text) {
+  fileLog(text, true);
 }
 
-void pumpLog(const String& text, bool appendDate) {
+void fileLog(const String& text, bool appendDate) {
   String message = "";
   if (appendDate) {
     message += "[";
@@ -85,7 +87,7 @@ void pumpLog(const String& text, bool appendDate) {
     message += "] ";
   }
   message += text;
-  size_t sz = writeLog(PUMP_LOG_FILENAME, message);
+  size_t sz = writeLog(PUMP_LOG_FILE, message);
   Serial.printf("[Log] '%s' (%u bytes) <W>\n", message.c_str(), sz);
 }
 
@@ -95,6 +97,7 @@ void ntpSetup() {
 
 time_t ntpSync() {
   ntp.update();
+  yield();
   if (ntp.getEpochTime() < TIME_START) {
     // invalid time
     return 0;
@@ -119,18 +122,20 @@ void ntpUpdate() {
 void statusReport() {
   static int srCount = 0;
   String data = "text=";
-  data += urlencode("ESP8266-Status-Report-");
+  data += urlencode("ESP8266_Status_Report_");
   data += urlencode(WiFi.hostname());
-  data += urlencode("-");
+  data += urlencode("_");
   data += (++srCount);
   data += "&desp=";
-  data += urlencode("ESP8266 is Online");
-  data += urlencode(", Current Time: ");
+  data += urlencode("ESP8266 is running");
+  data += urlencode(", DateTime: ");
   data += urlencode(nowString());
-  data += urlencode(", Up Time: ");
+  data += urlencode(", UpTime: ");
   data += millis() / 1000;
   data += urlencode("s, Timestamp: ");
   data += now();
+  data += urlencode(", SSID: ");
+  data += urlencode(WiFi.SSID());
   data += urlencode(", IP:");
   data += urlencode(WiFi.localIP().toString());
   data += urlencode(" (No.");
@@ -148,10 +153,13 @@ void pumpReport() {
     pumpTotalElapsed += pumpLastOnElapsed;
   }
   Serial.print("[Server] Pump is ");
-  Serial.println(isOn ? "Started" : "Stopped");
+  Serial.print(isOn ? "Started" : "Stopped");
+  Serial.print(" at ");
+  Serial.println(nowString());
   String data = "text=";
-  data += urlencode("Pump-Status-Report-");
-  data += isOn ? "Started-" : "Stopped-";
+  data += urlencode("Pump_Status_Report_");
+  data += urlencode(WiFi.hostname());
+  data += isOn ? "_Started_" : "_Stopped_";
   data += pumpTotalCounter;
   data += "&desp=";
   String desp = "Pump";
@@ -162,21 +170,20 @@ void pumpReport() {
   desp += pumpTotalElapsed;
   desp += "s";
   if (!isOn) {
-    desp += ", Current: ";
+    desp += ", Elapsed: ";
     desp += pumpLastOnElapsed;
     desp += "s";
   }
   desp += " (";
   desp += pumpTotalCounter;
   desp += ")";
-  pumpLog(desp);
+  fileLog(desp);
   data += urlencode(desp);
   //   httpsPost(reportUrl, data);
 }
 
 void onWiFiConnected(const WiFiEventStationModeConnected& evt) {
-  Serial.print("[WiFi] connected, ssid: ");
-  Serial.println(evt.ssid);
+    // see onWiFiGotIP
 }
 
 void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
@@ -187,10 +194,13 @@ void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
 }
 
 void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
-  Serial.print("[WiFi] got ip: ");
-  Serial.println(evt.ip);
+    String msg = "[WiFi] connected, ip: ";
+    msg += WiFi.localIP().toString();
+    msg += " ssid: ";
+    msg += WiFi.SSID();
+    Serial.println(msg);
   if (wifiInitialized) {
-    pumpLog("WiFi connected, ip: " + evt.ip.toString());
+    fileLog(msg);
   }
 }
 
@@ -209,9 +219,10 @@ String processor(const String& var) {
   } else if (var == "PUMP_LAST_RUN_DURATION") {
     return pumpLastOnElapsed > 0 ? String(pumpLastOnElapsed) + "s" : "N/A";
   } else if (var == "PUMP_LOGS") {
-    String lines = readLog(PUMP_LOG_FILENAME);
+    String lines = readLog(PUMP_LOG_FILE);
     Serial.printf("[Log] '%s' (%u bytes)<R>\n", "", lines.length());
-    lines.replace("\r\n", "</td></tr>\n<tr><td>");
+    lines.replace("\n", "</td></tr>\n<tr><td>");
+    lines.replace("\r", "");
     String logText = "<tr><td>";
     logText += lines;
     logText += "</td></tr>";
@@ -222,7 +233,8 @@ String processor(const String& var) {
     String output = "";
     if (cmdOutput) {
       output += "<p>";
-      cmdOutput.replace("\r\n", "</p><p>");
+      cmdOutput.replace("\n", "</p><p>");
+      cmdOutput.replace("\r", "");
       output += cmdOutput;
       output += "</p>";
     }
@@ -240,8 +252,8 @@ void handleNotFound(AsyncWebServerRequest* request) {
 void handleLogs(AsyncWebServerRequest* req) {
   Serial.println("[Server] handleLogs");
   req->send(SPIFFS, "/logs.html", String(), false, processor);
-//   Serial.printf("[Server] Free Stack: %d, Free Heap: %d\n",
-//                 ESP.getFreeContStack(), ESP.getFreeHeap());
+  Serial.printf("[Server] Free Stack: %d, Free Heap: %d\n",
+                ESP.getFreeContStack(), ESP.getFreeHeap());
 }
 
 void handleRoot(AsyncWebServerRequest* req) {
@@ -262,9 +274,9 @@ void handlePump0(bool action) {
     elapsed = (millis() - pumpStartedMs + 1.0f) / 1000.0;
   }
   Serial.print("[Server] Pump is ");
-  Serial.print(isOn ? "Stopping" : "Starting");
+  Serial.print(isOn ? "Running" : "Idle");
   if (isOn) {
-    Serial.print(", Elapsed Time: ");
+    Serial.print(", Elapsed: ");
     Serial.print(elapsed);
     Serial.print("s");
     pumpStartedMs = 0;
@@ -275,20 +287,19 @@ void handlePump0(bool action) {
     pumpLastOnAt = nowTs;
     pumpLastOnElapsed = 0;
   }
-  Serial.print(" at ");
-  Serial.println(timeString());
+  Serial.println();
   digitalWrite(pumpPin, action ? HIGH : LOW);
   pumpLastModifiedMs = millis();
-  timer.setTimeout(200L, pumpReport);
+  timer.setTimeout(100L, pumpReport);
 }
 
 void startPump() {
-  Serial.println("[CMD] startPump");
+  Serial.println("[CMD] startPump at " + nowString());
   handlePump0(true);
   timer.setTimeout(PUMP_RUN_DURATION_TEST, stopPump);
 }
 void stopPump() {
-  Serial.println("[CMD] stopPump");
+  Serial.println("[CMD] stopPump at " + nowString());
   handlePump0(false);
 }
 
@@ -312,7 +323,7 @@ void handlePump(AsyncWebServerRequest* req) {
 }
 
 void handleClear(AsyncWebServerRequest* req) {
-  bool removed = SPIFFS.remove(PUMP_LOG_FILENAME);
+  bool removed = SPIFFS.remove(PUMP_LOG_FILE);
   Serial.print("[Server] Pump logs cleared, result: ");
   Serial.println(removed ? "success" : "fail");
   req->redirect("/logs");
@@ -335,12 +346,12 @@ void handleCmdGet(AsyncWebServerRequest* req) {
 
 void handleCmdPost(AsyncWebServerRequest* req) {
   Serial.println("[Server] handleCmdPost");
-  size_t n = req->params();
-  for (size_t i = 0; i < n; i++) {
-    AsyncWebParameter* p = req->getParam(i);
-    Serial.printf("Param: %s = %s, isPost:%d\n", p->name().c_str(),
-                  p->value().c_str(), p->isPost() ? 1 : 0);
-  }
+  //   size_t n = req->params();
+  //   for (size_t i = 0; i < n; i++) {
+  //     AsyncWebParameter* p = req->getParam(i);
+  //     Serial.printf("Param: %s = %s, isPost:%d\n", p->name().c_str(),
+  //                   p->value().c_str(), p->isPost() ? 1 : 0);
+  //   }
   if (!req->hasParam("action")) {
     req->redirect("/cmd");
     return;
@@ -368,6 +379,11 @@ void setupServer() {
   } else {
     Serial.println("[Server] Error setting up MDNS responder!");
   }
+
+  // accessible at "<IP Address>/webserial" in browser
+  WebSerial.begin(&server);
+  WebSerial.msgCallback(webSerialRecv);
+
   server.on("/", HTTP_GET, handleRoot);
   server.on("/logs", HTTP_GET, handleLogs);
   server.on("/pump", HTTP_POST, handlePump);
@@ -381,6 +397,15 @@ void setupServer() {
   Serial.println("[Server] HTTP server started");
 }
 
+void webSerialRecv(uint8_t* data, size_t len) {
+  WebSerial.println("Received Data...");
+  String d = "";
+  for (int i = 0; i < len; i++) {
+    d += char(data[i]);
+  }
+  WebSerial.println(d);
+}
+
 void setupWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
@@ -388,18 +413,15 @@ void setupWiFi() {
   wh1 = WiFi.onStationModeConnected(&onWiFiConnected);
   wh2 = WiFi.onStationModeDisconnected(&onWiFiDisconnected);
   wh3 = WiFi.onStationModeGotIP(&onWiFiGotIP);
-  Serial.print("[WiFi] Connecting......");
+  Serial.println("[WiFi] Connecting......");
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.print(".");
     delay(500);
   }
-  // If connection successful show IP address in serial monitor
-  Serial.println("");
   Serial.print("[WiFi] Connected to ");
-  Serial.println(ssid);
-  Serial.print("[WiFi] IP address: ");
-  Serial.println(WiFi.localIP());  // IP address assigned to your ESP
-  Serial.print("[WiFi] Hostname: ");
+  Serial.print(WiFi.SSID());
+  Serial.print(", IP: ");
+  Serial.print(WiFi.localIP());
+  Serial.print(", Hostname: ");
   Serial.println(WiFi.hostname());
   wifiInitialized = true;
   WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
@@ -429,11 +451,12 @@ BLYNK_CONNECTED() {
 void checkWiFi() {
   Serial.print("[WiFi] Status: ");
   Serial.print(WiFi.status());
+  Serial.print(", SSID: ");
+  Serial.print(WiFi.SSID());
   Serial.print(", IP: ");
   Serial.print(WiFi.localIP());
   Serial.print(", Time: ");
   Serial.println(timeString());
-  //   Serial.println(ntp.getFormattedTime());
   if (!WiFi.isConnected()) {
     Serial.println("[WiFi] connection lost, reconnecting...");
     WiFi.reconnect();
@@ -466,6 +489,7 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.setDebugOutput(false);
+
   Serial.println("\r\n");
   Serial.println("[System] ESP8266 Board is booting...");
   if (!SPIFFS.begin()) {
@@ -490,7 +514,7 @@ void setup() {
   setSyncInterval(3 * 24 * 60 * 60);  // in seconds = 3 days
   setSyncProvider(ntpSync);
   statusReport();
-  pumpLog("ESP8266 Borad initialized.");
+  fileLog("ESP8266 Board initialized.");
   //   listFiles();
 }
 

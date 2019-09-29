@@ -14,6 +14,9 @@ const unsigned long TIME_START = 1000000000L;  // 20010909
 
 size_t writeLog(const String& path, const String& text);
 String readLog(const String& path);
+int timedRead(Stream& s);
+size_t countLine(const String& path);   // with yield, only in loop
+size_t countLine2(const String& path);  // without yield, use in anyhwere
 String nowString();
 String dateString();
 String timeString();
@@ -32,7 +35,9 @@ size_t writeLog(const String& path, const String& text) {
   if (!f) {
     return -1;
   }
-  return f.println(text);
+  size_t c = f.print(text);
+  c += f.print('\n');
+  return c;
 }
 
 String readLog(const String& path) {
@@ -41,6 +46,68 @@ String readLog(const String& path) {
     return "";
   }
   return f.readString();
+}
+
+int timedRead(Stream& s) {
+  int c;
+  unsigned long _startMillis = millis();
+  do {
+    c = s.read();
+    if (c >= 0)
+      return c;
+    yield();
+  } while (millis() - _startMillis < 500);
+  return -1;
+}
+
+String readStringUntil(Stream& s, char terminator) {
+  String ret;
+  int c = s.read();
+  while (c >= 0 && c != terminator) {
+    ret += (char)c;
+    c = s.read();
+  }
+  return ret;
+}
+
+size_t countLine(const String& path) {
+  File f = SPIFFS.open(path, "r");
+  if (!f) {
+    return 0;
+  }
+  size_t c = 0;
+  int i;
+  while (true) {
+    i = timedRead(f);
+    if (i == -1) {
+      break;
+    }
+    if (i == '\n') {
+      c++;
+    }
+  }
+
+  return c;
+}
+
+size_t countLine2(const String& path) {
+  File f = SPIFFS.open(path, "r");
+  if (!f) {
+    return 0;
+  }
+  size_t c = 0;
+  int i;
+  while (true) {
+    i = f.read();
+    if (i == -1) {
+      break;
+    }
+    if (i == '\n') {
+      c++;
+    }
+  }
+
+  return c;
 }
 
 String nowString() {
