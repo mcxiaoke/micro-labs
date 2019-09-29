@@ -16,31 +16,34 @@ static const char PROGMEM ROOT_PAGE_TPL[] =  R"rawliteral(
             max-width: 640px;
             margin: auto;
         }
+
+        form {
+            display: inline-block;
+        }
     </style>
 </head>
 
 <body>
     <div class="content">
-        <h1>Water Pump Server</h1>
+        <h1>Water Pump</h1>
+        <hr>
         <p>{{DATE_TIME}}</p>
         <p>LED Status: {{LED_LABEL}}</p>
         <p>Pump Status: {{PUMP_LABEL}}</p>
         <p>Last RunAt: {{PUMP_LAST_RUN_AT}}</p>
         <p>Last Duration: {{PUMP_LAST_RUN_DURATION}}</p>
+        <hr>
         <form action="/led?action={{LED_ACTION}}" method="POST">
             <input type="submit" value="{{LED_SUBMIT}}">
         </form>
         <form action="/pump?action={{PUMP_ACTION}}" method="POST">
             <input type="submit" value="{{PUMP_SUBMIT}}">
         </form>
+        <a href="/logs"><button>Logs</button></a>
+        <a href="/"><button>Refresh</button></a>
         <form action="/reset" method="POST">
-            <input type="submit" value="Reboot">
+            <input type="submit" value="Reboot" onclick="return confirm('Are you sure to do chip reset ?')">
         </form>
-        <form action="/clear" method="POST">
-            <input type="submit" value="Clear Logs">
-        </form>
-        <p><a href="/logs"><button>View Logs</button></a></p>
-        <p><a href="/"><button>Refresh Page</button></a></p>
     </div>
 </body>
 
@@ -57,11 +60,15 @@ static const char PROGMEM LOGS_PAGE_TPL[] =  R"rawliteral(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Pump Server Logs</title>
+    <title>Pump Logs</title>
     <style>
         .content {
             max-width: 640px;
             margin: auto;
+        }
+
+        form {
+            display: inline-block;
         }
 
         table,
@@ -76,11 +83,18 @@ static const char PROGMEM LOGS_PAGE_TPL[] =  R"rawliteral(
 <body>
     <div class="content">
         <h4>Pump Logs</h4>
+        <div>
+            <a href="/"><button>Home</button></a>
+            <a href="/logs"><button>Refresh</button></a>
+            <form action="/clear" method="POST">
+                <input type="submit" value="Clear" onclick="return confirm('Are you sure to delete all logs ?')">
+            </form>
+        </div>
+        <hr>
         <table>
             {{PUMP_LOGS}}
         </table>
-        <p><a href="/"><button>Back to Home</button></a></p>
-        <p><a href="/"><button>Refresh Page</button></a></p>
+        <hr>
     </div>
 </body>
 

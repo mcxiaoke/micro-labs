@@ -140,7 +140,6 @@ String urlencode(String str) {
       encodedString += '%';
       encodedString += code0;
       encodedString += code1;
-
     }
     yield();
   }

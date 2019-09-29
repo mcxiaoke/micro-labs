@@ -18,16 +18,19 @@
 #include "internal.h"
 #include "net.h"
 
+// https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
+
 // 1 minutes per day, 2 times, 30 seconds per one run
 const unsigned long PUMP_RUN_INTERVAL = 8 * 60 * 60 * 1000L;  // 8 hours
-const unsigned long PUMP_RUN_DURATION = 20 * 1000L;            // 60/3=20 seconds
-const unsigned long PUMP_RUN_INTERVAL_TEST = 1 * 60 * 1000L;   // 1 minutes
-const unsigned long PUMP_RUN_DURATION_TEST = 10 * 1000L;       // 10 seconds
+const unsigned long PUMP_RUN_DURATION = 20 * 1000L;           // 60/3=20 seconds
+const unsigned long PUMP_RUN_INTERVAL_TEST = 1 * 60 * 1000L;  // 1 minutes
+const unsigned long PUMP_RUN_DURATION_TEST = 10 * 1000L;      // 10 seconds
 const char* PUMP_LOG_FILENAME = "pump.log";
 
 int ledPin = 2;   // d4 LED_BUILTIN
 int pumpPin = 4;  // d2 relay
 
+bool wifiInitialized = false;
 bool ntpSyncSuccess = false;
 unsigned long pumpStartedMs = 0;
 unsigned long pumpLastModifiedMs = 0;
@@ -49,6 +52,7 @@ void handleLED0(bool action);
 void handleLED();
 void startLED();
 void stopLED();
+void handleLogs();
 void handlePump();
 void handlePump0(bool action);
 void startPump();
@@ -75,9 +79,8 @@ void pumpLog(const String& text, bool appendDate) {
     message += "] ";
   }
   message += text;
-  Serial.print("[System] Write Log: ");
-  Serial.println(message);
-  writeLog(PUMP_LOG_FILENAME, message);
+  size_t sz = writeLog(PUMP_LOG_FILENAME, message);
+  Serial.printf("[Log] '%s' (%u bytes) <W>\n", message.c_str(), sz);
 }
 
 String getDateTimeLabel(PageArgument& args) {
@@ -124,7 +127,10 @@ String getPumpLastRunDuration(PageArgument& args) {
 
 String getLogPageLines(PageArgument& args) {
   String log = readLog(PUMP_LOG_FILENAME);
+  Serial.printf("[Log] '%s' (%u bytes)<R>\n", log.c_str(), log.length());
   log.replace("\r\n", "</td></tr>\n            <tr><td>");
+  Serial.printf("Free Stack: %d, Free Heap: %d, ", ESP.getFreeContStack(),
+                ESP.getFreeHeap());
   return "<tr><td>" + log + "</td></tr>";
 }
 
@@ -178,6 +184,8 @@ void statusReport() {
   static int srCount = 0;
   String data = "text=";
   data += urlencode("ESP8266-Status-Report-");
+  data += urlencode(WiFi.hostname());
+  data += urlencode("-");
   data += (++srCount);
   data += "&desp=";
   data += urlencode("ESP8266 is Online");
@@ -197,14 +205,11 @@ void statusReport() {
 }
 
 void onWiFiConnected(const WiFiEventStationModeConnected& evt) {
-  handleLED0(true);
   Serial.print("[WiFi] connected, ssid: ");
   Serial.println(evt.ssid);
-  pumpLog("WiFi Connected to " + evt.ssid);
 }
 
 void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
-  handleLED0(false);
   Serial.print("[WiFi] not connected, ssid: ");
   Serial.print(evt.ssid);
   Serial.print(", reason: ");
@@ -212,10 +217,11 @@ void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
 }
 
 void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
-  handleLED0(true);
   Serial.print("[WiFi] got ip: ");
   Serial.println(evt.ip);
-  pumpLog("WiFi got ip " + evt.ip.toString());
+  if (wifiInitialized) {
+    pumpLog("WiFi connected, ip: " + evt.ip.toString());
+  }
 }
 
 void handleNotFound() {
@@ -253,6 +259,13 @@ void handleLED() {
   redirectRoot();
 }
 
+void handleLogs() {
+//   String log = readLog(PUMP_LOG_FILENAME);
+//   Serial.printf("[Log] '%s' (%u bytes)<R>\n", log.c_str(), log.length());
+//   log.replace("\r\n", "</td></tr>\n            <tr><td>");
+//   return "<tr><td>" + log + "</td></tr>";
+}
+
 void pumpReport() {
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (isOn) {
@@ -266,7 +279,7 @@ void pumpReport() {
   data += urlencode("Pump-Status-Report-");
   data += pumpTotalCounter;
   data += "&desp=";
-  String desp = " Pump";
+  String desp = "Pump";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
   desp += timeString();
@@ -283,7 +296,7 @@ void pumpReport() {
   desp += ")";
   pumpLog(desp);
   data += urlencode(desp);
-    httpsPost(reportUrl, data);
+  //   httpsPost(reportUrl, data);
 }
 
 void redirectRoot() {
@@ -327,7 +340,7 @@ void handlePump0(bool action) {
 void startPump() {
   Serial.println("[CMD] startPump");
   handlePump0(true);
-  timer.setTimeout(PUMP_RUN_DURATION, stopPump);
+  timer.setTimeout(PUMP_RUN_DURATION_TEST, stopPump);
 }
 void stopPump() {
   Serial.println("[CMD] stopPump");
@@ -371,6 +384,7 @@ void setupServer() {
   //   server.on("/", handleRoot);
   RootPage.insert(server);
   LogsPage.insert(server);
+  //   server.on("/logs", HTTP_GET, handleLogs);
   server.on("/led", HTTP_POST, handleLED);
   server.on("/pump", HTTP_POST, handlePump);
   server.on("/clear", HTTP_POST, handleClear);
@@ -400,6 +414,8 @@ void setupWiFi() {
   Serial.println(WiFi.localIP());  // IP address assigned to your ESP
   Serial.print("[WiFi] Hostname: ");
   Serial.println(WiFi.hostname());
+  wifiInitialized = true;
+  WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
 }
 
 // for led pin
@@ -461,9 +477,8 @@ void setup() {
   if (!SPIFFS.begin()) {
     Serial.println("[System] Failed to mount file system");
   }
-
-  pumpLog("ESP8266 Borad booting...");
-
+  // if size is too large
+  //   SPIFFS.format();
   pinMode(ledPin, OUTPUT);
   pinMode(pumpPin, OUTPUT);
   setupWiFi();
@@ -479,10 +494,11 @@ void setup() {
   timer.setInterval(30 * 1000L, checkWiFi);  // in milliseconds
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
   //   timer.setInterval(5 * 60 * 1000L, statusReport);
-  timer.setInterval(PUMP_RUN_INTERVAL, startPump);
+  timer.setInterval(PUMP_RUN_INTERVAL_TEST, startPump);
   setSyncInterval(24 * 60 * 60);  // in seconds = 1 hour
   setSyncProvider(ntpSync);
   //   SPIFFS.remove("config.log");
+  pumpLog("ESP8266 Borad initialized.");
 }
 
 void loop() {
