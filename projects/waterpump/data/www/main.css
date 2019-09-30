@@ -1,0 +1,14 @@
+.content {
+    max-width: 640px;
+    margin: auto;
+    padding: 20px;
+}
+
+.output {
+    font-size: 80%;
+    line-height: 80%;
+}
+
+form {
+    display: inline-block;
+}

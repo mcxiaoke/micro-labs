@@ -21,6 +21,10 @@ String nowString();
 String dateString();
 String timeString();
 String dateString(unsigned long ts);
+String timeString(unsigned long ts);
+String dateTimeString(unsigned long ts);
+String elapsedFormatMs(unsigned long ts);
+String elapsedFormat(unsigned long ts);
 void eSetup();
 void eWriteInt(int address, int value);
 int eReadInt(int address);
@@ -111,25 +115,73 @@ size_t countLine2(const String& path) {
 }
 
 String nowString() {
-  return dateString(now());
+  return dateTimeString(now());
 }
 
 String dateString() {
-  char buf[32];
+  char buf[16];
   sprintf(buf, "%04d-%02d-%02d", year(), month(), day());
   return String(buf);
 }
 String timeString() {
-  char buf[32];
+  char buf[16];
   sprintf(buf, "%02d:%02d:%02d", hour(), minute(), second());
   return String(buf);
 }
 
 String dateString(unsigned long ts) {
+  char buf[16];
+  sprintf(buf, "%04d-%02d-%02d", year(ts), month(ts), day(ts));
+  return String(buf);
+}
+String timeString(unsigned long ts) {
+  char buf[16];
+  sprintf(buf, "%02d:%02d:%02d", hour(ts), minute(ts), second(ts));
+  return String(buf);
+}
+
+String dateTimeString(unsigned long ts) {
   char buf[32];
   sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", year(ts), month(ts), day(ts),
           hour(ts), minute(ts), second(ts));
   return String(buf);
+}
+
+String elapsedFormatMs(unsigned long ms) {
+  return elapsedFormat(ms / 1000);
+}
+
+// in seconds
+String elapsedFormat(unsigned long sec) {
+  // 4010
+  // 4010/3600 = 1h
+  // 4010%3600 = 410
+  // 410/60 = 6m
+  // 410%60 = 50
+  // 50s
+  unsigned long h = sec / 3600;
+  unsigned long m = (sec % 3600) / 60;
+  unsigned long c = sec % 60;
+  String s = "";
+  if (h > 0) {
+    s += h;
+    s += "h";
+  }
+  if (m > 0) {
+    if (s) {
+      s += " ";
+    }
+    s += m;
+    s += "m";
+  }
+  if (c > 0) {
+    if (s) {
+      s += " ";
+    }
+    s += c;
+    s += "s";
+  }
+  return s;
 }
 
 void eSetup() {

@@ -29,14 +29,14 @@ String wifiHttpPost(String& url, String& body, WiFiClient& client) {
   if (http.begin(client, url)) {  // HTTP
     // Serial.print("[HTTP] POST sending...\n");
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    Serial.printf("[HTTP] POST, body: %s\n", urldecode(body).c_str());
+    // Serial.printf("[HTTP] POST, body: %s\n", urldecode(body).c_str());
     int httpCode = http.POST(body);
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
       Serial.printf("[HTTP] POST, code: %d\n", httpCode);
       // file found at server
       String payload = http.getString();
-      Serial.printf("[HTTP] POST, content: %s\n", payload.c_str());
+    //   Serial.printf("[HTTP] POST, content: %s\n", payload.c_str());
       return payload;
     } else {
       Serial.printf("[HTTP] POST, error: %s\n",
@@ -61,7 +61,7 @@ String wifiHttpGet(String& url, WiFiClient& client) {
       Serial.printf("[HTTP] GET, code: %d\n", httpCode);
       // file found at server
       String payload = http.getString();
-      Serial.printf("[HTTP] GET, content: %s\n", payload.c_str());
+    //   Serial.printf("[HTTP] GET, content: %s\n", payload.c_str());
       return payload;
     } else {
       Serial.printf("[HTTP] GET, error: %s\n",
