@@ -13,16 +13,38 @@
         <hr />
         <div>
             <form action="/"><button type="submit">Home</button></form>
-            <form action="/logs">
-                <button type="submit">Refresh</button>
+            <form id="reload-form" action="/j/get_logs" , method="GET">
+                <button type="button" id="reload" onclick="javascript:loadData();">Reload</button>
             </form>
             <form action="/clear" method="POST">
-                <button type="submit">Clear</button>
+                <button type="submit" onclick="return confirm('Are you sure to delete all logs?')">Clear</button>
             </form>
         </div>
         <hr />
-        <div class="output">%PUMP_OUTPUT%</div>
+        <div class="output" id="output"></div>
     </div>
+    <!-- <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script> -->
+    <script>
+        function loadData() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/j/get_logs');
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    var outputText = xhr.responseText.split(/\n/).map((it) => "<p>" + it + "</p>").join("\n");
+                    document.getElementById("output").innerHTML = outputText;
+                } else {
+                    console.error("Failed: " + xhr.statusText);
+                    document.getElementById("output").innerHTML = "<p>Error: " + xhr.statusText + "</p>";
+                }
+            };
+            xhr.send();
+            return false;
+        }
+        window.addEventListener('DOMContentLoaded', (e) => {
+            // call on dom loaded.
+            loadData();
+        });
+    </script>
 </body>
 
 </html>

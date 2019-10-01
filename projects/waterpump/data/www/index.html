@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <title>Pump Home</title>
-    <link rel="stylesheet" type="text/css" href="main.css" />
+    <link rel="stylesheet" type="text/css" href="/www/main.css" />
 </head>
 
 <body>
@@ -14,31 +14,28 @@
         <div class="output">
             <p>Pump Status: %PUMP_LABEL% (%DATE_TIME%)</p>
             <p>Last RunAt: %PUMP_RUN_AT%, Elapsed: %PUMP_RUN_ELAPSED%</p>
-            <p>Interval: %PUMP_INTERVAL%, Duration:%PUMP_DURATION%</p>
+            <p>Interval: %PUMP_INTERVAL%, Duration: %PUMP_DURATION%</p>
         </div>
         <hr />
         <div>
-            <form action="/pump?action=%PUMP_ACTION%" method="POST">
+            <form action="/j/toggle_pump?action=%PUMP_ACTION%" method="POST">
                 <button type="submit">%PUMP_SUBMIT%</button>
             </form>
         </div>
         <p></p>
         <div>
-            <form action="/">
-                <button type="submit">Refresh</button>
-            </form>
-            <button onclick="location.href='/logs'" type="button">
+            <button onclick="location.href='/www/logs.html'" type="button">
                 View Logs
             </button>
             <form action="/file/pump.log">
                 <button type="submit">Full Logs</button>
             </form>
-            <form action="/clear" method="POST">
+            <form action="/j/clear_logs" method="POST">
                 <button type="submit" onclick="return confirm('Are you sure to delete all logs?')">
                     Clear Logs
                 </button>
             </form>
-            <form action="/cmd">
+            <form action="/www/cmd.html">
                 <button type="submit">Commands</button>
             </form>
         </div>

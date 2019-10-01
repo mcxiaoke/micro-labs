@@ -23,8 +23,8 @@ String timeString();
 String dateString(unsigned long ts);
 String timeString(unsigned long ts);
 String dateTimeString(unsigned long ts);
-String elapsedFormatMs(unsigned long ts);
-String elapsedFormat(unsigned long ts);
+String humanTimeMs(unsigned long ts);
+String humanTime(unsigned long ts);
 void eSetup();
 void eWriteInt(int address, int value);
 int eReadInt(int address);
@@ -147,12 +147,12 @@ String dateTimeString(unsigned long ts) {
   return String(buf);
 }
 
-String elapsedFormatMs(unsigned long ms) {
-  return elapsedFormat(ms / 1000);
+String humanTimeMs(unsigned long ms) {
+  return humanTime(ms / 1000);
 }
 
 // in seconds
-String elapsedFormat(unsigned long sec) {
+String humanTime(unsigned long sec) {
   // 4010
   // 4010/3600 = 1h
   // 4010%3600 = 410
@@ -168,14 +168,14 @@ String elapsedFormat(unsigned long sec) {
     s += "h";
   }
   if (m > 0) {
-    if (s) {
+    if (s.length() > 1) {
       s += " ";
     }
     s += m;
     s += "m";
   }
   if (c > 0) {
-    if (s) {
+    if (s.length() > 1) {
       s += " ";
     }
     s += c;

@@ -1,17 +1,18 @@
-//#define DEBUG_MODE 1
-
+#define DEBUG_MODE 1
+#define BLYNK_PRINT Serial
 #include <Arduino.h>
 #include <BlynkSimpleEsp8266.h>
-#include <FS.h>
-#define BLYNK_PRINT Serial
+#include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266mDNS.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <FS.h>
 #include <NTPClient.h>
 #include <TimeLib.h>
+#include <Updater.h>
 // #include <WebSerial.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
@@ -35,6 +36,7 @@ unsigned long checkWifiInterval;
 
 bool wifiInitialized = false;
 bool ntpInitialized = false;
+unsigned long progressPrintMs;
 unsigned long pumpStartedMs = 0;
 unsigned long pumpLastModifiedMs = 0;
 
@@ -58,20 +60,24 @@ void webSerialRecv(uint8_t* data, size_t len);
 void handleWebSerialCmd(const String& cmd);
 void fileLog(const String& text, bool);
 void fileLog(const String& text);
-String rootProcessor(const String& var);
-String logsProcessor(const String& var);
-String cmdProcessor(const String& var);
+String templateProcessor(const String& var);
 void handleNotFound(AsyncWebServerRequest* req);
 void handleRoot(AsyncWebServerRequest* req);
-void handleLogs(AsyncWebServerRequest* req);
 void handlePump(AsyncWebServerRequest* req);
 void handlePump0(bool action);
 void startPump();
 void stopPump();
-void handleClear(AsyncWebServerRequest* req);
-void handleReset(AsyncWebServerRequest* req);
-void handleCmdGet(AsyncWebServerRequest* req);
-void handleCmdPost(AsyncWebServerRequest* req);
+void handleClearLogs(AsyncWebServerRequest* req);
+void handleResetBoard(AsyncWebServerRequest* req);
+void handleRequestDeleteFile(AsyncWebServerRequest* req);
+void handleRequestGetFiles(AsyncWebServerRequest* req);
+void handleRequestGetLogs(AsyncWebServerRequest* req);
+void handleOTAUpdate(AsyncWebServerRequest*,
+                     const String&,
+                     size_t,
+                     uint8_t*,
+                     size_t,
+                     bool);
 
 const char* ntpServer = "ntp.ntsc.ac.cn";
 WiFiUDP ntpUDP;
@@ -95,6 +101,20 @@ void fileLog(const String& text, bool appendDate) {
   message += text;
   writeLog(PUMP_LOG_FILE, message);
   terminal.println(message);
+}
+
+void setOTAUpdated() {
+  // flag at 1023;
+  EEPROM.write(1023, 1);
+  EEPROM.commit();
+}
+
+byte isOTAUpdated() {
+  // read and reset to 0
+  byte b = EEPROM.read(1023);
+  EEPROM.write(1023, 0);
+  EEPROM.commit();
+  return b;
 }
 
 void ntpSetup() {
@@ -149,9 +169,12 @@ void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
   }
 }
 
-String rootProcessor(const String& var) {
-  //   Serial.println("rootProcessor var=" + var);
+String templateProcessor(const String& var) {
   bool isOn = digitalRead(pumpPin) == HIGH;
+  //   Serial.print("[Server] templateProcessor var=");
+  //   Serial.print(var);
+  //   Serial.print(" status=");
+  //   Serial.println(isOn ? "On" : "Off");
   if (var == "DATE_TIME") {
     return timeString();
   } else if (var == "PUMP_LABEL") {
@@ -165,60 +188,26 @@ String rootProcessor(const String& var) {
   } else if (var == "PUMP_RUN_ELAPSED") {
     return pumpLastOnElapsed > 0 ? String(pumpLastOnElapsed) + "s" : "N/A";
   } else if (var == "PUMP_INTERVAL") {
-    return elapsedFormatMs(runInterval);
+    return humanTimeMs(runInterval);
   } else if (var == "PUMP_DURATION") {
-    return elapsedFormatMs(runDuration);
-  }
-  return String();
-}
-
-String cmdProcessor(const String& var) {
-  Serial.println("cmdProcessor var=" + var);
-  if (var == "CMD_OUTPUT") {
-    String output = "";
-    if (cmdOutput) {
-      output += "<p>";
-      cmdOutput.replace("\n", "</p><p>");
-      output += cmdOutput;
-      output += "</p>";
-      //   Serial.println(output);
-    }
-    cmdOutput = "";
-    return output;
-  }
-  return String();
-}
-
-String logsProcessor(const String& var) {
-  Serial.println("logsProcessor var=" + var);
-  if (var == "PUMP_OUTPUT") {
-    String output = "<p>";
-    String lines = readLog(PUMP_LOG_FILE);
-    if (lines) {
-      lines.replace("\n", "</p>\n<p>");
-      output += lines;
-    }
-    output += "</p>";
-    // Serial.println(output);
-    return output;
+    return humanTimeMs(runDuration);
   }
   return String();
 }
 
 void handleNotFound(AsyncWebServerRequest* request) {
   Serial.println("[Server] handleNotFound url: " + request->url());
-  request->send(404, "text/plain", "Not found");
-}
-
-void handleLogs(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleLogs");
-  req->send(SPIFFS, "/www/logs.html", String(), false, logsProcessor);
+  if (request->method() == HTTP_OPTIONS) {
+    request->send(200);
+  } else {
+    request->send(404);
+  }
 }
 
 void handleRoot(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleRoot");
+  Serial.println("[Server] handleRoot lastRunAt:" + timeString(pumpLastOnAt));
   //   req->send_P(200, "text/html", ROOT_PAGE_TPL, processor);
-  req->send(SPIFFS, "/www/index.html", String(), false, rootProcessor);
+  req->send(SPIFFS, "/www/index.html", String(), false, templateProcessor);
 }
 
 void handlePump0(bool action) {
@@ -282,53 +271,94 @@ void handlePump(AsyncWebServerRequest* req) {
   req->redirect("/");
 }
 
-void handleClear(AsyncWebServerRequest* req) {
+void handleClearLogs(AsyncWebServerRequest* req) {
   bool removed = SPIFFS.remove(PUMP_LOG_FILE);
   Serial.print("[Server] Pump logs cleared, result: ");
   Serial.println(removed ? "success" : "fail");
   req->redirect("/logs");
 }
 
-void handleReset(AsyncWebServerRequest* req) {
+void handleResetBoard(AsyncWebServerRequest* req) {
   Serial.print("[Server] Pump is rebooting...");
   req->redirect("/");
   server.end();
   ESP.restart();
 }
 
-void handleCmdGet(AsyncWebServerRequest* req) {
-  Serial.print("[Server] handleCmdGet: ");
-  Serial.println(req->url());
-  req->send(SPIFFS, "/www/cmd.html", String(), false, cmdProcessor);
+void handleRequestDeleteFile(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRequestDeleteFile");
+  String output = "";
+  if (req->hasParam("file_path", true)) {
+    AsyncWebParameter* path = req->getParam("file_path", true);
+    String filePath = path->value();
+    if (SPIFFS.remove(filePath)) {
+      output = "File:";
+      output += filePath;
+      output += " is deleted.";
+      req->send(200, "text/plain", output);
+    } else {
+      output = "Failed to delete file:";
+      output += filePath;
+      req->send(404, "text/plain", output);
+    }
+  } else {
+    req->send(400, "text/plain", "Invalid Parameters.");
+  }
 }
 
-void handleCmdPost(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleCmdPost");
-  //   size_t n = req->params();
-  //   for (size_t i = 0; i < n; i++) {
-  //     AsyncWebParameter* p = req->getParam(i);
-  //     Serial.printf("Param: %s = %s, isPost:%d\n", p->name().c_str(),
-  //                   p->value().c_str(), p->isPost() ? 1 : 0);
-  //   }
-  if (!req->hasParam("action")) {
-    req->redirect("/cmd");
-    return;
-  }
-  AsyncWebParameter* action = req->getParam("action");
-  if (action && action->value() == "fs_delete") {
-    if (req->hasParam("fs_path", true)) {
-      AsyncWebParameter* path = req->getParam("fs_path", true);
-      String filePath = path->value();
-      if (SPIFFS.remove(filePath)) {
-        cmdOutput = "File '";
-        cmdOutput += filePath;
-        cmdOutput += "' is deleted.";
-      }
+void handleRequestGetFiles(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRequestGetFiles");
+  String content = listFiles();
+  req->send(200, "text/plain", content);
+}
+void handleRequestGetLogs(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRequestGetLogs");
+  req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+}
+
+void handleOTAUpdate(AsyncWebServerRequest* request,
+                     const String& filename,
+                     size_t index,
+                     uint8_t* data,
+                     size_t len,
+                     bool final) {
+  if (!index) {
+    Serial.println("[OTA] Update begin, firmware: " + filename);
+    size_t conentLength = request->contentLength();
+    // if filename includes spiffs, update the spiffs partition
+    int cmd = (filename.indexOf("spiffs") > -1) ? U_SPIFFS : U_FLASH;
+    Update.runAsync(true);
+    if (!Update.begin(conentLength, cmd)) {
+      Update.printError(Serial);
     }
-  } else if (action->value() == "fs_list") {
-    cmdOutput = listFiles();
   }
-  req->redirect("/cmd");
+
+  if (Update.write(data, len) != len) {
+    Update.printError(Serial);
+  } else {
+    if (progressPrintMs == 0 || millis() - progressPrintMs > 500) {
+      Serial.printf("[OTA] Upload progress: %d%%\n",
+                    (Update.progress() * 100) / Update.size());
+      progressPrintMs = millis();
+    }
+  }
+
+  if (final) {
+    AsyncWebServerResponse* response = request->beginResponse(
+        302, "text/plain", "[OTA] Please wait while the device reboots");
+    response->addHeader("Refresh", "20");
+    response->addHeader("Location", "/");
+    request->send(response);
+    if (!Update.end(true)) {
+      Update.printError(Serial);
+    } else {
+      setOTAUpdated();
+      fileLog("[OTA] Board firmware update completed.");
+      Serial.println("[OTA] Update complete, will reboot.");
+      Serial.flush();
+      ESP.restart();
+    }
+  }
 }
 
 void setupServer() {
@@ -341,18 +371,27 @@ void setupServer() {
   // accessible at "<IP Address>/webserial" in browser
   //   WebSerial.begin(&server);
   //   WebSerial.msgCallback(webSerialRecv);
-
   server.on("/", HTTP_GET, handleRoot);
-  server.on("/logs", HTTP_GET, handleLogs);
-  server.on("/pump", HTTP_POST, handlePump);
-  server.on("/clear", HTTP_POST, handleClear);
-  server.on("/reset", HTTP_POST, handleReset);
-  server.on("/cmd", HTTP_GET, handleCmdGet);
-  server.on("/cmd", HTTP_POST, handleCmdPost);
-  server.serveStatic("/file/", SPIFFS, "/file/");
-  server.serveStatic("/www/", SPIFFS, "/www/");
-  server.serveStatic("/main.css", SPIFFS, "/www/main.css");
   server.onNotFound(handleNotFound);
+  server.serveStatic("/file/", SPIFFS, "/file/");
+  server.serveStatic("/www/", SPIFFS, "/www/").setDefaultFile("index.html");
+  server.on("/j/toggle_pump", HTTP_POST, handlePump);
+  server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
+  server.on("/j/reset_board", HTTP_POST, handleResetBoard);
+  server.on("/j/delete_file", HTTP_POST, handleRequestDeleteFile);
+  server.on("/j/get_files", HTTP_GET, handleRequestGetFiles);
+  server.on("/j/get_logs", HTTP_GET, handleRequestGetLogs);
+  server.on("/www/update.html", HTTP_POST,
+            [](AsyncWebServerRequest* request) {},
+            [](AsyncWebServerRequest* request, const String& filename,
+               size_t index, uint8_t* data, size_t len, bool final) {
+              handleOTAUpdate(request, filename, index, data, len, final);
+            });
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Server", WiFi.hostname());
+#ifdef DEBUG_MODE
+  DefaultHeaders::Instance().addHeader("DebugMode", "True");
+#endif
   server.begin();
   Serial.println("[Server] HTTP server started");
 }
@@ -445,7 +484,7 @@ BLYNK_WRITE(V9)  // Button Widget is writing to pin V9
 
 BLYNK_CONNECTED() {
   Serial.println("[Blynk] Connected!");
-  Blynk.syncAll();
+  //   Blynk.syncAll();
 }
 
 void checkWiFi() {
@@ -481,7 +520,7 @@ String listFiles() {
     output += " (";
     output += dir.fileSize();
     output += ")";
-    output += "\r\n";
+    output += "\n";
   };
   return output;
 }
@@ -489,9 +528,6 @@ String listFiles() {
 // 1 minutes per day, 2 times, 30 seconds per one run
 // total water elapsed 12m = 720s, 720/10=72, 72/4=18
 void setupData() {
-  if (!SPIFFS.begin()) {
-    Serial.println("[System] Failed to mount file system");
-  }
   pinMode(ledPin, OUTPUT);
   pinMode(pumpPin, OUTPUT);
   bool debugMode = false;
@@ -525,8 +561,18 @@ void setTimers() {
 void setup() {
   // Debug console
   Serial.begin(115200);
-  delay(500);
+  Serial.println();
+  delay(1000);
   Serial.println("[System] ESP8266 Board is booting...");
+  EEPROM.begin(1024);
+  if (!SPIFFS.begin()) {
+    Serial.println("[System] Failed to mount file system");
+  } else {
+    Serial.println("[System] SPIFFS file system mounted.");
+  }
+  if (isOTAUpdated()) {
+    Serial.println("[System] OTA Updated! " + ESP.getSketchMD5());
+  }
   //----------
   setupData();
   setupWiFi();
@@ -538,7 +584,7 @@ void setup() {
   // You can also specify server:
   // Blynk.begin(auth, ssid, pass, "blynk-cloud.com", 80);
   // Blynk.begin(auth, ssid, pass, IPAddress(192,168,1,100), 8080);
-  fileLog("[System] ESP8266 Board initialized.");
+  fileLog("[System] ESP8266 Board powered on at " + nowString());
   //   listFiles();
   statusReport();
 }
@@ -548,6 +594,34 @@ void loop() {
   timer.run();
 }
 
+String buildStatusDesp() {
+  String desp = "Pump Server is running";
+  desp += ", Board:";
+  desp += WiFi.hostname();
+  desp += ", DateTime:";
+  desp += nowString();
+  desp += (", UpTime:");
+  desp += humanTimeMs(millis());
+  desp += (", SSID:");
+  desp += (WiFi.SSID());
+  desp += (", IP:");
+  desp += (WiFi.localIP().toString());
+  desp += (", runInterval=");
+  desp += humanTimeMs(runInterval);
+  desp += (", runDuration=");
+  desp += humanTimeMs(runDuration);
+  desp += (", checkWifiInterval=");
+  desp += humanTimeMs(checkWifiInterval);
+  desp += (", lastRunAt=");
+  desp += (dateTimeString(pumpLastOnAt));
+  desp += (", lastRunDuration=");
+  desp += pumpLastOnElapsed;
+  desp += ("s, totalDuration=");
+  desp += pumpTotalElapsed;
+  desp += "s]";
+  return desp;
+}
+
 void statusReport() {
   static int srCount = 0;
   String data = "text=";
@@ -555,41 +629,16 @@ void statusReport() {
 #ifdef DEBUG_MODE
   data += urlencode("DEBUG_");
 #endif
+  String desp = buildStatusDesp();
   data += (++srCount);
   data += "&desp=";
-  data += urlencode("Pump Server is running");
-  data += urlencode(", DateTime: ");
-  data += urlencode(nowString());
-  data += urlencode(", UpTime: ");
-  data += millis() / 1000;
-  data += urlencode("s, Timestamp: ");
-  data += now();
-  data += urlencode(", SSID: ");
-  data += urlencode(WiFi.SSID());
-  data += urlencode(", IP:");
-  data += urlencode(WiFi.localIP().toString());
-  data += urlencode(", Config: [ ");
-  data += urlencode("runInterval=");
-  data += runInterval / 1000;
-  data += urlencode("s, runDuration=");
-  data += runDuration / 1000;
-  data += urlencode("s, checkWifiInterval=");
-  data += checkWifiInterval / 1000;
-  data += urlencode("s ], Status: [ ");
-  data += urlencode("lastRunAt=");
-  data += urlencode(dateTimeString(pumpLastOnAt));
-  data += urlencode(", lastRunDuration=");
-  data += pumpLastOnElapsed;
-  data += urlencode("s, totalDuration=");
-  data += pumpTotalElapsed;
-  data += "s ]";
-  data += urlencode(" (No.");
-  data += srCount;
-  data += ")";
-  Serial.printf("[Report] %s Status Report No.%2d is sent to server.\n",
-                WiFi.hostname().c_str(), srCount);
+  data += urlencode(desp);
+  Serial.print("[Report] ");
+  Serial.println(desp);
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
+  Serial.printf("[Report] %s Status Report No.%2d is sent to server.\n",
+                WiFi.hostname().c_str(), srCount);
 #endif
 }
 
@@ -600,7 +649,7 @@ void pumpReport() {
   } else {
     pumpTotalElapsed += pumpLastOnElapsed;
     Serial.println("[Server] Pump is scheduled at " +
-                   dateTimeString(now() + runInterval));
+                   dateTimeString(now() + runInterval / 1000));
   }
   bool debugMode = false;
 #ifdef DEBUG_MODE
