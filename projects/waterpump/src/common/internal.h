@@ -41,6 +41,7 @@ size_t writeLog(const String& path, const String& text) {
   }
   size_t c = f.print(text);
   c += f.print('\n');
+  f.close();
   return c;
 }
 
@@ -49,7 +50,9 @@ String readLog(const String& path) {
   if (!f) {
     return "";
   }
-  return f.readString();
+  String s = f.readString();
+  f.close();
+  return s;
 }
 
 int timedRead(Stream& s) {

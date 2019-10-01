@@ -9,17 +9,21 @@
 
 <body>
     <div class="content">
-        <h1>Pump Home</h1>
+        <h1>Pump Home %DEBUG%</h1>
         <hr />
         <div class="output">
-            <p>Pump Status: %PUMP_LABEL% (%DATE_TIME%)</p>
+            <p id="switch_label" style="color: red">Global Switch: %SWITCH_LABEL%</p>
+            <p id="pump_label">Pump Status: %PUMP_LABEL% (%DATE_TIME%)</p>
             <p>Last RunAt: %PUMP_RUN_AT%, Elapsed: %PUMP_RUN_ELAPSED%</p>
             <p>Interval: %PUMP_INTERVAL%, Duration: %PUMP_DURATION%</p>
         </div>
         <hr />
         <div>
             <form action="/j/toggle_pump?action=%PUMP_ACTION%" method="POST">
-                <button type="submit">%PUMP_SUBMIT%</button>
+                <button type="submit" id="pump_submit">%PUMP_SUBMIT%</button>
+            </form>
+            <form action="/j/toggle_switch?action=%SWITCH_ACTION%" method="POST">
+                <button type="submit" id="switch_submit">%SWITCH_SUBMIT%</button>
             </form>
         </div>
         <p></p>
@@ -39,7 +43,18 @@
                 <button type="submit">Commands</button>
             </form>
         </div>
+        <hr>
+        <div class="output">
+
+        </div>
     </div>
+    <script>
+        window.addEventListener('DOMContentLoaded', (e) => {
+            var pumpSubmit = document.getElementById("pump_submit");
+            var switchLabel = document.getElementById("switch_label").textContent;
+            pumpSubmit.disabled = !switchLabel.includes("On");
+        });
+    </script>
 </body>
 
 </html>

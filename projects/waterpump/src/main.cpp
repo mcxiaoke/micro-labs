@@ -14,6 +14,7 @@
 #include <TimeLib.h>
 #include <Updater.h>
 // #include <WebSerial.h>
+#include <ArduinoJson.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
@@ -25,6 +26,7 @@
 
 // https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
 const char* PUMP_LOG_FILE = "/file/pump.log";
+const char* JSON_CONFIG_FILE = "/file/config.json";
 
 int ledPin = 2;    // d4 2
 int pumpPin = D2;  // d2 io4
@@ -36,6 +38,7 @@ unsigned long checkWifiInterval;
 
 bool wifiInitialized = false;
 bool ntpInitialized = false;
+bool globalSwitchOn = true;
 unsigned long progressPrintMs;
 unsigned long pumpStartedMs = 0;
 unsigned long pumpLastModifiedMs = 0;
@@ -60,18 +63,23 @@ void webSerialRecv(uint8_t* data, size_t len);
 void handleWebSerialCmd(const String& cmd);
 void fileLog(const String& text, bool);
 void fileLog(const String& text);
+void saveConfig();
+void loadConfig();
 String templateProcessor(const String& var);
 void handleNotFound(AsyncWebServerRequest* req);
 void handleRoot(AsyncWebServerRequest* req);
 void handlePump(AsyncWebServerRequest* req);
+void handleSwitch(AsyncWebServerRequest* req);
 void handlePump0(bool action);
 void startPump();
 void stopPump();
 void handleClearLogs(AsyncWebServerRequest* req);
 void handleResetBoard(AsyncWebServerRequest* req);
+
 void handleRequestDeleteFile(AsyncWebServerRequest* req);
 void handleRequestGetFiles(AsyncWebServerRequest* req);
 void handleRequestGetLogs(AsyncWebServerRequest* req);
+void handleRequestGetData(AsyncWebServerRequest* req);
 void handleOTAUpdate(AsyncWebServerRequest*,
                      const String&,
                      size_t,
@@ -99,8 +107,45 @@ void fileLog(const String& text, bool appendDate) {
     message += "] ";
   }
   message += text;
-  writeLog(PUMP_LOG_FILE, message);
+  message += " [";
+  message += globalSwitchOn ? "On" : "Off";
+  message += "]";
+  size_t c = writeLog(PUMP_LOG_FILE, message);
+  if (c) {
+    Serial.printf("[Log] %u bytes log written to file.\n", c);
+  }
   terminal.println(message);
+}
+
+void saveConfig() {
+  StaticJsonDocument<64> doc;
+  doc["switch"] = globalSwitchOn;
+  doc["ts"] = now();
+  //   SPIFFS.remove(JSON_CONFIG_FILE);
+  File file = SPIFFS.open(JSON_CONFIG_FILE, "w");
+  // Serialize JSON to file
+  if (serializeJson(doc, file) == 0) {
+    Serial.println(F("[Config] Failed to save json config."));
+  }
+  Serial.println(F("[Config] saveConfig: "));
+  serializeJsonPretty(doc, Serial);
+  Serial.println();
+  file.close();
+}
+
+void loadConfig() {
+  File file = SPIFFS.open(JSON_CONFIG_FILE, "r");
+  StaticJsonDocument<64> doc;
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, file);
+  if (error) {
+    Serial.println(F("[Config] Failed to load json config."));
+  }
+  Serial.println(F("[Config] loadConfig: "));
+  serializeJsonPretty(doc, Serial);
+  Serial.println();
+  globalSwitchOn = doc["switch"] | true;
+  file.close();
 }
 
 void setOTAUpdated() {
@@ -171,11 +216,13 @@ void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
 
 String templateProcessor(const String& var) {
   bool isOn = digitalRead(pumpPin) == HIGH;
-  //   Serial.print("[Server] templateProcessor var=");
-  //   Serial.print(var);
-  //   Serial.print(" status=");
-  //   Serial.println(isOn ? "On" : "Off");
-  if (var == "DATE_TIME") {
+  if (var == "DEBUG") {
+#ifdef DEBUG_MODE
+    return "(DEBUG)";
+#else
+    return "";
+#endif
+  } else if (var == "DATE_TIME") {
     return timeString();
   } else if (var == "PUMP_LABEL") {
     return isOn ? "Running" : "Idle";
@@ -191,6 +238,12 @@ String templateProcessor(const String& var) {
     return humanTimeMs(runInterval);
   } else if (var == "PUMP_DURATION") {
     return humanTimeMs(runDuration);
+  } else if (var == "SWITCH_LABEL") {
+    return globalSwitchOn ? "On" : "Off";
+  } else if (var == "SWITCH_SUBMIT") {
+    return globalSwitchOn ? "Switch Off" : "Switch On";
+  } else if (var == "SWITCH_ACTION") {
+    return globalSwitchOn ? "off" : "on";
   }
   return String();
 }
@@ -205,12 +258,18 @@ void handleNotFound(AsyncWebServerRequest* request) {
 }
 
 void handleRoot(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleRoot lastRunAt:" + timeString(pumpLastOnAt));
+  bool isOn = digitalRead(pumpPin) == HIGH;
+  Serial.print("[Server] handleRoot status=");
+  Serial.println(isOn ? "On" : "Off");
   //   req->send_P(200, "text/html", ROOT_PAGE_TPL, processor);
   req->send(SPIFFS, "/www/index.html", String(), false, templateProcessor);
 }
 
 void handlePump0(bool action) {
+  if (!globalSwitchOn) {
+    Serial.print(F("[Server] handlePump0 global switch is off, ignore."));
+    return;
+  }
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (action == isOn) {
     return;
@@ -271,11 +330,26 @@ void handlePump(AsyncWebServerRequest* req) {
   req->redirect("/");
 }
 
+void handleSwitch(AsyncWebServerRequest* req) {
+  if (!req->hasArg("action")) {
+    req->redirect("/");
+    return;
+  }
+  String actionStr = req->arg("action");
+  bool action = actionStr == "on";
+  bool isOn = globalSwitchOn;
+  Serial.printf("[Server] Switch actionStr=%s, isOn=%d\n", actionStr.c_str(),
+                isOn);
+  globalSwitchOn = action;
+  req->redirect("/");
+  saveConfig();
+}
+
 void handleClearLogs(AsyncWebServerRequest* req) {
   bool removed = SPIFFS.remove(PUMP_LOG_FILE);
   Serial.print("[Server] Pump logs cleared, result: ");
   Serial.println(removed ? "success" : "fail");
-  req->redirect("/logs");
+  req->redirect("/");
 }
 
 void handleResetBoard(AsyncWebServerRequest* req) {
@@ -314,6 +388,30 @@ void handleRequestGetFiles(AsyncWebServerRequest* req) {
 void handleRequestGetLogs(AsyncWebServerRequest* req) {
   Serial.println("[Server] handleRequestGetLogs");
   req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+}
+
+void handleRequestGetData(AsyncWebServerRequest* req) {
+  //   Serial.printf("[System] Free Stack: %d, Free Heap: %d\n",
+  //                 ESP.getFreeContStack(), ESP.getFreeHeap());
+  StaticJsonDocument<512> doc;
+  doc["ts"] = now();
+  doc["name"] = WiFi.hostname();
+  doc["ssid"] = WiFi.SSID();
+  doc["ip"] = WiFi.localIP().toString();
+  //   doc["mac"] = WiFi.macAddress();
+  doc["on"] = digitalRead(pumpPin) == HIGH;
+  doc["lastAt"] = pumpLastOnAt;
+  doc["lastElapsed"] = pumpLastOnElapsed;
+  doc["period"] = runInterval;
+  doc["duration"] = runDuration;
+  doc["w_period"] = checkWifiInterval;
+  doc["r_period"] = reportInterval;
+  doc["switch"] = globalSwitchOn;
+
+#ifdef DEBUG_MODE
+  doc["debug"] = true;
+#endif
+  serializeJsonPretty(doc, Serial);
 }
 
 void handleOTAUpdate(AsyncWebServerRequest* request,
@@ -376,11 +474,13 @@ void setupServer() {
   server.serveStatic("/file/", SPIFFS, "/file/");
   server.serveStatic("/www/", SPIFFS, "/www/").setDefaultFile("index.html");
   server.on("/j/toggle_pump", HTTP_POST, handlePump);
+  server.on("/j/toggle_switch", HTTP_POST, handleSwitch);
   server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
   server.on("/j/reset_board", HTTP_POST, handleResetBoard);
   server.on("/j/delete_file", HTTP_POST, handleRequestDeleteFile);
   server.on("/j/get_files", HTTP_GET, handleRequestGetFiles);
   server.on("/j/get_logs", HTTP_GET, handleRequestGetLogs);
+  server.on("/j/get_data", HTTP_GET, handleRequestGetData);
   server.on("/www/update.html", HTTP_POST,
             [](AsyncWebServerRequest* request) {},
             [](AsyncWebServerRequest* request, const String& filename,
@@ -560,6 +660,7 @@ void setTimers() {
 
 void setup() {
   // Debug console
+  // Free Stack:2352, Free Heap:35928
   Serial.begin(115200);
   Serial.println();
   delay(1000);
@@ -574,6 +675,7 @@ void setup() {
     Serial.println("[System] OTA Updated! " + ESP.getSketchMD5());
   }
   //----------
+  loadConfig();
   setupData();
   setupWiFi();
   setupServer();
@@ -598,6 +700,12 @@ String buildStatusDesp() {
   String desp = "Pump Server is running";
   desp += ", Board:";
   desp += WiFi.hostname();
+//   desp += ", Free Stack:";
+//   desp += ESP.getFreeContStack();
+//   desp += ", Free Heap:";
+//   desp += ESP.getFreeHeap();
+  desp += ", Global Switch:";
+  desp += globalSwitchOn ? "On" : "Off";
   desp += ", DateTime:";
   desp += nowString();
   desp += (", UpTime:");
@@ -618,7 +726,7 @@ String buildStatusDesp() {
   desp += pumpLastOnElapsed;
   desp += ("s, totalDuration=");
   desp += pumpTotalElapsed;
-  desp += "s]";
+  desp += "s";
   return desp;
 }
 
