@@ -10,7 +10,8 @@
   (((1970 + Y) > 0) && !((1970 + Y) % 4) && \
    (((1970 + Y) % 100) || !((1970 + Y) % 400)))
 
-const time_t TIME_START = 1000000000L;  // 20010909
+const time_t TIME_START = 1500000000L;  // in seconds
+const time_t TZ_OFFSET = 8 * 3600L;     // in seconds
 
 size_t writeLog(const String& path, const String& text);
 String readLog(const String& path);
@@ -125,23 +126,14 @@ String nowString() {
 }
 
 String dateString() {
-  if (now() < TIME_START) {
-    return "N/A";
-  }
-  char buf[16];
-  sprintf(buf, "%04d-%02d-%02d", year(), month(), day());
-  return String(buf);
+  return dateString(now());
 }
 String timeString() {
-  if (now() < TIME_START) {
-    return "N/A";
-  }
-  char buf[16];
-  sprintf(buf, "%02d:%02d:%02d", hour(), minute(), second());
-  return String(buf);
+  return timeString(now());
 }
 
 String dateString(unsigned long ts) {
+  ts += TZ_OFFSET;
   if (ts < TIME_START) {
     return "N/A";
   }
@@ -150,6 +142,7 @@ String dateString(unsigned long ts) {
   return String(buf);
 }
 String timeString(unsigned long ts) {
+  ts += TZ_OFFSET;
   if (ts < TIME_START) {
     return "N/A";
   }
@@ -159,6 +152,7 @@ String timeString(unsigned long ts) {
 }
 
 String dateTimeString(unsigned long ts) {
+  ts += TZ_OFFSET;
   if (ts < TIME_START) {
     return "N/A";
   }

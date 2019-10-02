@@ -39,7 +39,7 @@ unsigned long runInterval;     // ms
 unsigned long runDuration;     // ms
 unsigned long updateInterval;  // ms
 unsigned long wifiInterval;    // ms
-unsigned long ntpInterval;     // in seconds
+unsigned long ntpInterval;     // ms
 
 bool wifiInitialized = false;
 bool ntpInitialized = false;
@@ -54,6 +54,8 @@ unsigned long pumpLastOnElapsed = 0;
 unsigned int pumpTotalCounter = 0;
 unsigned long pumpTotalElapsed = 0;
 unsigned long ntpLastRunAt = 0;
+
+int runTimerId, wifiTimerId, updateTimerId;
 
 SimpleTimer timer;
 WiFiEventHandler wh1, wh2, wh3;
@@ -71,6 +73,7 @@ void fileLog(const String& text, bool);
 void fileLog(const String& text);
 void saveConfig();
 void loadConfig();
+void showPumpTaskInfo();
 String templateProcessor(const String& var);
 void handleNotFound(AsyncWebServerRequest* req);
 void handleRoot(AsyncWebServerRequest* req);
@@ -97,11 +100,8 @@ void handleOTAUpdate(AsyncWebServerRequest*,
 
 const char* ntpServer = "ntp.ntsc.ac.cn";
 WiFiUDP ntpUDP;
-NTPClient ntp(ntpUDP, ntpServer, 3600L * 8, 60 * 60 * 1000L);
-
-// ESP Async Web Server Begin
+NTPClient ntp(ntpUDP, ntpServer, 0, 60 * 60 * 1000L);
 AsyncWebServer server(80);
-// ESP Async Web Server End
 
 void blinkLED() {
   digitalWrite(ledPin, !digitalRead(ledPin));
@@ -191,10 +191,12 @@ byte isOTAUpdated() {
 
 time_t ntpSync() {
   ntp.update();
+  Serial.print(F("[NTP] Server time is "));
+  Serial.println(dateTimeString(ntp.getEpochTime()));
   if (ntp.getEpochTime() < TIME_START) {
     // invalid time, failed, retry after 5s
     // timer.setTimeout(5 * 1000L, ntpSync);
-    Serial.print(F("[NTP] Sync get time failed."));
+    Serial.println(F("[NTP] Server time invalid."));
     return 0;
   }
   ntpLastRunAt = ntp.getEpochTime();
@@ -280,17 +282,31 @@ void handleNotFound(AsyncWebServerRequest* request) {
   }
 }
 
+void showPumpTaskInfo() {
+  Serial.printf("[Pump] Now time is %s\n", nowString());
+  Serial.printf(
+      "[Pump] Last run at %s, elapsed %s\n",
+      dateTimeString(now() - timer.getElapsed(runTimerId) / 1000).c_str(),
+      humanTimeMs(timer.getElapsed(runTimerId)));
+  Serial.printf(
+      "[Pump] Next run at %s, remain %s\n",
+      dateTimeString(now() + timer.getRemain(runTimerId) / 1000).c_str(),
+      humanTimeMs(timer.getRemain(runTimerId)).c_str());
+  Serial.flush();
+}
+
 void handleRoot(AsyncWebServerRequest* req) {
   bool isOn = digitalRead(pumpPin) == HIGH;
   Serial.print("[Server] handleRoot status=");
   Serial.println(isOn ? "On" : "Off");
   //   req->send_P(200, "text/html", ROOT_PAGE_TPL, processor);
   req->send(SPIFFS, "/www/index.html", String(), false, templateProcessor);
+  showPumpTaskInfo();
 }
 
 void handlePump0(bool action) {
   if (!globalSwitchOn) {
-    Serial.print(F("[Server] handlePump0 global switch is off, ignore."));
+    Serial.print(F("[Pump] handlePump0 global switch is off, ignore."));
     return;
   }
   bool isOn = digitalRead(pumpPin) == HIGH;
@@ -303,7 +319,7 @@ void handlePump0(bool action) {
     // in seconds
     elapsed = (millis() - pumpStartedMs + 1.0f) / 1000.0;
   }
-  Serial.print("[Server] Pump is ");
+  Serial.print("[Pump] Pump is ");
   Serial.print(isOn ? "Running" : "Idle");
   // now is on, will off;
   if (isOn) {
@@ -325,18 +341,18 @@ void handlePump0(bool action) {
 }
 
 void startPump() {
-  Serial.println("[CMD] startPump at " + nowString());
+  Serial.println("[Pump] startPump at " + nowString());
   handlePump0(true);
   timer.setTimeout(runDuration, stopPump);
 }
 void stopPump() {
-  Serial.println("[CMD] stopPump at " + nowString());
+  Serial.println("[Pump] stopPump at " + nowString());
   handlePump0(false);
 }
 
 void handlePump(AsyncWebServerRequest* req) {
   if (pumpLastModifiedMs > 0 && millis() - pumpLastModifiedMs < 2000L) {
-    Serial.println("[Server] Pump action too often, ignored.");
+    Serial.println("[Pump] Pump action too often, ignored.");
     req->redirect("/");
     return;
   }
@@ -347,8 +363,7 @@ void handlePump(AsyncWebServerRequest* req) {
   String actionStr = req->arg("action");
   bool action = actionStr == "on";
   bool isOn = digitalRead(pumpPin) == HIGH;
-  Serial.printf("[Server] Pump actionStr=%s, isOn=%d\n", actionStr.c_str(),
-                isOn);
+  Serial.printf("[Pump] Pump actionStr=%s, isOn=%d\n", actionStr.c_str(), isOn);
   handlePump0(action);
   req->redirect("/");
 }
@@ -421,8 +436,12 @@ String getStatusJson(bool pretty) {
   doc["ip"] = WiFi.localIP().toString();
   //   doc["mac"] = WiFi.macAddress();
   doc["on"] = digitalRead(pumpPin) == HIGH;
-  doc["lastAt"] = pumpLastOnAt;
   doc["lastElapsed"] = pumpLastOnElapsed;
+  // timer or manual last run at
+  doc["lastAt2"] = pumpLastOnAt;
+  // timer task last run at
+  doc["lastAt"] = now() - timer.getElapsed(runTimerId) / 1000;
+  doc["nextAt"] = now() + timer.getRemain(runTimerId) / 1000;
   doc["interval"] = runInterval;
   doc["duration"] = runDuration;
   doc["wifiPeriod"] = wifiInterval;
@@ -461,11 +480,15 @@ String getStatusText() {
   desp += nowString();
   desp += (", UpTime=");
   desp += humanTimeMs(millis());
-  desp += (", lastRunAt=");
+  desp += (", lastRunAt2=");
   desp += (dateTimeString(pumpLastOnAt));
+  desp += (", lastRunAt=");
+  desp += (dateTimeString(now() - timer.getElapsed(runTimerId) / 1000));
+  desp += (", nextRunAt=");
+  desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
   desp += (", lastOnElapsed=");
-  desp += pumpLastOnElapsed;
-  desp += ("s, totalElapsed=");
+  desp += humanTime(pumpLastOnElapsed);
+  desp += (", totalElapsed=");
   desp += pumpTotalElapsed;
   desp += (", runInterval=");
   desp += humanTimeMs(runInterval);
@@ -473,7 +496,7 @@ String getStatusText() {
   desp += humanTimeMs(runDuration);
   desp += (", wifiInterval=");
   desp += humanTimeMs(wifiInterval);
-  desp += ("s, ntpInterval=");
+  desp += (", ntpInterval=");
   desp += humanTime(ntpInterval);
   desp += (", ntpLastRunAt=");
   desp += dateTimeString(ntpLastRunAt);
@@ -696,30 +719,31 @@ void setupData() {
 #ifdef DEBUG_MODE
   debugMode = true;
   runInterval = 3 * 60 * 1000L;     // 3min
-  runDuration = 12 * 1000L;         // 12s
+  runDuration = 35 * 1000L;         // 35s
   updateInterval = 5 * 60 * 1000L;  // 5min
-  ntpInterval = 8 * 60;             // 8min, in seconds
+  ntpInterval = 8 * 60 * 1000L;     // 8min
   wifiInterval = 2 * 60 * 1000L;    // 2min
 #else
   debugMode = false;
   runInterval = 8 * 3600 * 1000L;     // 8 * 3 = 24 hours
   runDuration = 20 * 1000L;           // 60/3=20 seconds
   updateInterval = 4 * 3600 * 1000L;  // 4hours
-  ntpInterval = 2 * 3600;             // 2 hours
+  ntpInterval = 2 * 3600 * 1000L;     // 2 hours
   wifiInterval = 10 * 60 * 1000L;     // 10min
 #endif
   Serial.printf("[System] setupData, debugMode=%s\n",
                 debugMode ? "True" : "False");
 }
 
-void setTimers() {
-  setSyncInterval(ntpInterval);  // in seconds = 1 days
+void setupTimers() {
+  Serial.println(F("[System] Setup timers."));
+  setSyncInterval(ntpInterval / 1000);  // in seconds = 1 days
   setSyncProvider(ntpSync);
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
   //   timer.setInterval(5 * 60 * 1000L, statusReport);
-  timer.setInterval(wifiInterval, checkWiFi);  // in milliseconds
-  timer.setInterval(runInterval, startPump);
-  timer.setInterval(updateInterval, statusReport);
+  wifiTimerId = timer.setInterval(wifiInterval, checkWiFi);  // in milliseconds
+  runTimerId = timer.setInterval(runInterval, startPump);
+  updateTimerId = timer.setInterval(updateInterval, statusReport);
 }
 
 void setup() {
@@ -744,7 +768,7 @@ void setup() {
   setupWiFi();
   setupNTP();
   setupServer();
-  setTimers();
+  setupTimers();
   saveConfig();
   listFiles();
   statusReport();
@@ -769,7 +793,7 @@ void statusReport() {
   data += "&desp=";
   data += urlencode(desp);
   desp.replace(",", "\n");
-  Serial.println(desp);
+//   Serial.println(desp);
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
   Serial.printf("[Report] %s Status Report No.%2d is sent to server.\n",
