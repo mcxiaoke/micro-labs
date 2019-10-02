@@ -1,7 +1,5 @@
 #define DEBUG_MODE 1
-#define BLYNK_PRINT Serial
 #include <Arduino.h>
-#include <BlynkSimpleEsp8266.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
@@ -13,17 +11,21 @@
 #include <NTPClient.h>
 #include <TimeLib.h>
 #include <Updater.h>
+#include <time.h>
 // #include <WebSerial.h>
 #include <ArduinoJson.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
+// #include <user_interface.h>
 
 #include "common/config.h"
 #include "common/data.h"
 #include "common/internal.h"
 #include "common/net.h"
+#include "libs/SimpleTimer.h"
 
+// static esp8266::polledTimeout::periodicMs showTimeNow(10000);
 // https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
 
 const char* PUMP_LOG_FILE = "/file/pump.log";
@@ -53,9 +55,10 @@ unsigned int pumpTotalCounter = 0;
 unsigned long pumpTotalElapsed = 0;
 unsigned long ntpLastRunAt = 0;
 
-BlynkTimer timer;
+SimpleTimer timer;
 WiFiEventHandler wh1, wh2, wh3;
 
+void blinkLED();
 void fileStatus();
 void statusReport();
 void pumpReport();
@@ -98,6 +101,10 @@ NTPClient ntp(ntpUDP, ntpServer, 3600L * 8, 60 * 60 * 1000L);
 // ESP Async Web Server Begin
 AsyncWebServer server(80);
 // ESP Async Web Server End
+
+void blinkLED() {
+  digitalWrite(ledPin, !digitalRead(ledPin));
+}
 
 void fileLog(const String& text) {
   fileLog(text, true);
@@ -182,13 +189,16 @@ byte isOTAUpdated() {
 }
 
 void setupNTP() {
+  configTime(8 * 3600L, 0, "ntp.ntsc.ac.cn", "cn.ntp.org.cn",
+             "cn.pool.ntp.org");
   ntp.begin();
 }
 
 time_t ntpSync() {
   ntp.update();
   if (ntp.getEpochTime() < TIME_START) {
-    // invalid time
+    // invalid time, failed, retry after 30s
+    timer.setTimeout(30 * 1000L, ntpSync);
     return 0;
   }
   ntpLastRunAt = ntp.getEpochTime();
@@ -721,6 +731,7 @@ void setup() {
   if (isOTAUpdated()) {
     Serial.println("[System] OTA Updated! " + ESP.getSketchMD5());
   }
+
   loadConfig();
   setupData();
   setupWiFi();
