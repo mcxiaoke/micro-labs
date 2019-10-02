@@ -1,4 +1,4 @@
-#define DEBUG_MODE 1
+//#define DEBUG_MODE 1
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
@@ -82,10 +82,11 @@ void stopPump();
 void handleClearLogs(AsyncWebServerRequest* req);
 void handleResetBoard(AsyncWebServerRequest* req);
 
-void handleRequestDeleteFile(AsyncWebServerRequest* req);
-void handleRequestGetFiles(AsyncWebServerRequest* req);
-void handleRequestGetLogs(AsyncWebServerRequest* req);
-void handleRequestGetData(AsyncWebServerRequest* req);
+void handleRemoteDeleteFile(AsyncWebServerRequest* req);
+void handleRemoteGetFiles(AsyncWebServerRequest* req);
+void handleRemoteGetLogs(AsyncWebServerRequest* req);
+void handleRemoteGetStatusJson(AsyncWebServerRequest* req);
+void handleRemoteGetStatusText(AsyncWebServerRequest* req);
 void handleOTARedirect(AsyncWebServerRequest* req);
 void handleOTAUpdate(AsyncWebServerRequest*,
                      const String&,
@@ -188,17 +189,12 @@ byte isOTAUpdated() {
   return b;
 }
 
-void setupNTP() {
-  configTime(8 * 3600L, 0, "ntp.ntsc.ac.cn", "cn.ntp.org.cn",
-             "cn.pool.ntp.org");
-  ntp.begin();
-}
-
 time_t ntpSync() {
   ntp.update();
   if (ntp.getEpochTime() < TIME_START) {
-    // invalid time, failed, retry after 30s
-    timer.setTimeout(30 * 1000L, ntpSync);
+    // invalid time, failed, retry after 5s
+    // timer.setTimeout(5 * 1000L, ntpSync);
+    Serial.print(F("[NTP] Sync get time failed."));
     return 0;
   }
   ntpLastRunAt = ntp.getEpochTime();
@@ -211,7 +207,6 @@ time_t ntpSync() {
 }
 
 void ntpUpdate() {
-  Serial.println("[NTP] ntp Update.");
   ntpSync();
   if (ntp.getEpochTime() > TIME_START) {
     setTime(ntp.getEpochTime());
@@ -387,8 +382,8 @@ void handleResetBoard(AsyncWebServerRequest* req) {
   ESP.restart();
 }
 
-void handleRequestDeleteFile(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleRequestDeleteFile");
+void handleRemoteDeleteFile(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRemoteDeleteFile");
   String output = "";
   if (req->hasParam("file_path", true)) {
     AsyncWebParameter* path = req->getParam("file_path", true);
@@ -408,13 +403,13 @@ void handleRequestDeleteFile(AsyncWebServerRequest* req) {
   }
 }
 
-void handleRequestGetFiles(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleRequestGetFiles");
+void handleRemoteGetFiles(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRemoteGetFiles");
   String content = listFiles();
   req->send(200, "text/plain", content);
 }
-void handleRequestGetLogs(AsyncWebServerRequest* req) {
-  Serial.println("[Server] handleRequestGetLogs");
+void handleRemoteGetLogs(AsyncWebServerRequest* req) {
+  Serial.println("[Server] handleRemoteGetLogs");
   req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
 }
 
@@ -449,8 +444,7 @@ String getStatusJson(bool pretty) {
   return json;
 }
 String getStatusText() {
-  String desp = "[Status] ";
-  desp += "Board:";
+  String desp = "Board:";
   desp += WiFi.hostname();
   desp += ", Global Switch:";
   desp += globalSwitchOn ? "On" : "Off";
@@ -487,31 +481,16 @@ String getStatusText() {
   return desp;
 }
 
-void handleRequestGetData(AsyncWebServerRequest* req) {
+void handleRemoteGetStatusJson(AsyncWebServerRequest* req) {
   //   Serial.printf("[System] Free Stack: %d, Free Heap: %d\n",
   //                 ESP.getFreeContStack(), ESP.getFreeHeap());
-  StaticJsonDocument<512> doc;
-  doc["ts"] = now();
-  doc["name"] = WiFi.hostname();
-  doc["ssid"] = WiFi.SSID();
-  doc["ip"] = WiFi.localIP().toString();
-  //   doc["mac"] = WiFi.macAddress();
-  doc["on"] = digitalRead(pumpPin) == HIGH;
-  doc["lastAt"] = pumpLastOnAt;
-  doc["lastElapsed"] = pumpLastOnElapsed;
-  doc["period"] = runInterval;
-  doc["duration"] = runDuration;
-  doc["wifiPeriod"] = wifiInterval;
-  doc["wifiStatus"] = WiFi.status();
-  doc["updatePeriod"] = updateInterval;
-  doc["ntpPeriod"] = ntpInterval;
-  doc["ntpLast"] = ntpLastRunAt;
-  doc["switch"] = globalSwitchOn;
+  req->send(200, "application/json", getStatusJson(true));
+}
 
-#ifdef DEBUG_MODE
-  doc["debug"] = true;
-#endif
-  serializeJsonPretty(doc, Serial);
+void handleRemoteGetStatusText(AsyncWebServerRequest* req) {
+  String text = getStatusText();
+  text.replace(", ", "\n");
+  req->send(200, "text/plain", text);
 }
 
 void handleOTARedirect(AsyncWebServerRequest* req) {
@@ -581,10 +560,11 @@ void setupServer() {
   server.on("/j/toggle_switch", HTTP_POST, handleSwitch);
   server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
   server.on("/j/reset_board", HTTP_POST, handleResetBoard);
-  server.on("/j/delete_file", HTTP_POST, handleRequestDeleteFile);
-  server.on("/j/get_files", HTTP_GET, handleRequestGetFiles);
-  server.on("/j/get_logs", HTTP_GET, handleRequestGetLogs);
-  server.on("/j/get_data", HTTP_GET, handleRequestGetData);
+  server.on("/j/delete_file", HTTP_POST, handleRemoteDeleteFile);
+  server.on("/j/get_files", HTTP_GET, handleRemoteGetFiles);
+  server.on("/j/get_logs", HTTP_GET, handleRemoteGetLogs);
+  server.on("/j/get_status_json", HTTP_GET, handleRemoteGetStatusJson);
+  server.on("/j/get_status_text", HTTP_GET, handleRemoteGetStatusText);
   server.on("/ota", HTTP_GET, handleOTARedirect);
   server.on("/www/update.html", HTTP_POST,
             [](AsyncWebServerRequest* request) {},
@@ -631,6 +611,25 @@ void handleWebSerialCmd(const String& cmd) {
   showHelpMsg();
 }
 
+void setupNTP() {
+  //   configTime(8 * 3600L, 0, "ntp.ntsc.ac.cn", "cn.ntp.org.cn",
+  //              "cn.pool.ntp.org");
+  ntp.begin();
+  int retry = 100;
+  Serial.println("[NTP] Sync, get time from server.");
+  ntpUpdate();
+  while (timeStatus() != timeSet && --retry > 0) {
+    delay(1000);
+    Serial.println("[NTP] Sync, get time failed, retry");
+    ntpUpdate();
+  }
+  if (timeStatus() != timeSet) {
+    // ntp udpate failed, reboot
+    ESP.restart();
+  }
+  Serial.println(nowString());
+}
+
 void setupWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
@@ -640,8 +639,13 @@ void setupWiFi() {
   wh2 = WiFi.onStationModeDisconnected(&onWiFiDisconnected);
   wh3 = WiFi.onStationModeGotIP(&onWiFiGotIP);
   Serial.println("[WiFi] Connecting......");
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+  int retry = 100;
+  while (WiFi.status() != WL_CONNECTED && --retry > 0) {
     delay(500);
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    // wifi failed, reboot
+    ESP.restart();
   }
   wifiInitialized = true;
 }
@@ -736,8 +740,8 @@ void setup() {
   setupData();
   setupWiFi();
   setupNTP();
-  setTimers();
   setupServer();
+  setTimers();
   saveConfig();
   listFiles();
   statusReport();
@@ -761,6 +765,7 @@ void statusReport() {
   String desp = getStatusText();
   data += "&desp=";
   data += urlencode(desp);
+  desp.replace(",", "\n");
   Serial.println(desp);
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);

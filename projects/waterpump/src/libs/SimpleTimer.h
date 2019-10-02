@@ -48,7 +48,7 @@ class SimpleTimer {
 
 public:
     // maximum number of timers
-    const static int MAX_TIMERS = 10;
+    const static int MAX_TIMERS = 100;
 
     // setTimer() constants
     const static int RUN_FOREVER = 0;
