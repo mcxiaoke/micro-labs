@@ -263,6 +263,10 @@ String templateProcessor(const String& var) {
     return humanTimeMs(runInterval);
   } else if (var == "PUMP_DURATION") {
     return humanTimeMs(runDuration);
+  } else if (var == "PUMP_NEXT_AT") {
+    return dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
+  } else if (var == "PUMP_NEXT_REMAINS") {
+      return humanTimeMs(timer.getRemain(runTimerId));
   } else if (var == "SWITCH_LABEL") {
     return globalSwitchOn ? "On" : "Off";
   } else if (var == "SWITCH_SUBMIT") {
@@ -283,11 +287,11 @@ void handleNotFound(AsyncWebServerRequest* request) {
 }
 
 void showPumpTaskInfo() {
-  Serial.printf("[Pump] Now time is %s\n", nowString());
+  Serial.printf("[Pump] Now time is %s\n", nowString().c_str());
   Serial.printf(
       "[Pump] Last run at %s, elapsed %s\n",
       dateTimeString(now() - timer.getElapsed(runTimerId) / 1000).c_str(),
-      humanTimeMs(timer.getElapsed(runTimerId)));
+      humanTimeMs(timer.getElapsed(runTimerId)).c_str());
   Serial.printf(
       "[Pump] Next run at %s, remain %s\n",
       dateTimeString(now() + timer.getRemain(runTimerId) / 1000).c_str(),
