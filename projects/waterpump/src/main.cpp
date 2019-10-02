@@ -1,4 +1,4 @@
-//#define DEBUG_MODE 1
+#define DEBUG_MODE 1
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
@@ -446,17 +446,20 @@ String getStatusJson(bool pretty) {
 String getStatusText() {
   String desp = "Board:";
   desp += WiFi.hostname();
-  desp += ", Global Switch:";
+#ifdef DEBUG_MODE
+  desp += ", Debug Mode=true";
+#endif
+  desp += ", Global Switch=";
   desp += globalSwitchOn ? "On" : "Off";
-  desp += (", IP:");
+  desp += (", IP=");
   desp += (WiFi.localIP().toString());
-  desp += (", SSID:");
+  desp += (", SSID=");
   desp += (WiFi.SSID());
-  desp += (", WiFi Status:");
+  desp += (", WiFi Status=");
   desp += (WiFi.status());
-  desp += ", DateTime:";
+  desp += ", DateTime=";
   desp += nowString();
-  desp += (", UpTime:");
+  desp += (", UpTime=");
   desp += humanTimeMs(millis());
   desp += (", lastRunAt=");
   desp += (dateTimeString(pumpLastOnAt));
@@ -474,9 +477,9 @@ String getStatusText() {
   desp += humanTime(ntpInterval);
   desp += (", ntpLastRunAt=");
   desp += dateTimeString(ntpLastRunAt);
-  desp += ", Free Stack:";
+  desp += ", Free Stack=";
   desp += ESP.getFreeContStack();
-  desp += ", Free Heap:";
+  desp += ", Free Heap=";
   desp += ESP.getFreeHeap();
   return desp;
 }
