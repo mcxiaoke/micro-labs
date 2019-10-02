@@ -10,7 +10,7 @@
   (((1970 + Y) > 0) && !((1970 + Y) % 4) && \
    (((1970 + Y) % 100) || !((1970 + Y) % 400)))
 
-const unsigned long TIME_START = 1000000000L;  // 20010909
+const time_t TIME_START = 1000000000L;  // 20010909
 
 size_t writeLog(const String& path, const String& text);
 String readLog(const String& path);
@@ -118,32 +118,50 @@ size_t countLine2(const String& path) {
 }
 
 String nowString() {
+  if (now() < TIME_START) {
+    return "N/A";
+  }
   return dateTimeString(now());
 }
 
 String dateString() {
+  if (now() < TIME_START) {
+    return "N/A";
+  }
   char buf[16];
   sprintf(buf, "%04d-%02d-%02d", year(), month(), day());
   return String(buf);
 }
 String timeString() {
+  if (now() < TIME_START) {
+    return "N/A";
+  }
   char buf[16];
   sprintf(buf, "%02d:%02d:%02d", hour(), minute(), second());
   return String(buf);
 }
 
 String dateString(unsigned long ts) {
+  if (ts < TIME_START) {
+    return "N/A";
+  }
   char buf[16];
   sprintf(buf, "%04d-%02d-%02d", year(ts), month(ts), day(ts));
   return String(buf);
 }
 String timeString(unsigned long ts) {
+  if (ts < TIME_START) {
+    return "N/A";
+  }
   char buf[16];
   sprintf(buf, "%02d:%02d:%02d", hour(ts), minute(ts), second(ts));
   return String(buf);
 }
 
 String dateTimeString(unsigned long ts) {
+  if (ts < TIME_START) {
+    return "N/A";
+  }
   char buf[32];
   sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", year(ts), month(ts), day(ts),
           hour(ts), minute(ts), second(ts));

@@ -59,7 +59,10 @@
             var xhr = new XMLHttpRequest();
             xhr.onload = function () {
                 if (xhr.status === 200) {
-                    var outputText = xhr.responseText.split(/\n/).map((it) => "<p>" + it + "</p>").join("\n");
+                    var outputText = xhr.responseText.split(/\n/).map((it) => "<p><a href='"
+                        + it.trim()
+                        + "' target='_blank'>"
+                        + it + "</a></p>").join("\n");
                     d.getElementById("output").innerHTML = outputText;
                 } else {
                     console.error("Failed: " + xhr.statusText);

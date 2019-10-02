@@ -25,16 +25,19 @@
 #include "common/net.h"
 
 // https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
+
 const char* PUMP_LOG_FILE = "/file/pump.log";
 const char* JSON_CONFIG_FILE = "/file/config.json";
+const char* STATUS_FILE = "/file/status.json";
 
 int ledPin = 2;    // d4 2
 int pumpPin = D2;  // d2 io4
 
-unsigned long runInterval;
-unsigned long runDuration;
-unsigned long reportInterval;
-unsigned long checkWifiInterval;
+unsigned long runInterval;     // ms
+unsigned long runDuration;     // ms
+unsigned long updateInterval;  // ms
+unsigned long wifiInterval;    // ms
+unsigned long ntpInterval;     // in seconds
 
 bool wifiInitialized = false;
 bool ntpInitialized = false;
@@ -48,16 +51,16 @@ unsigned long pumpLastOffAt = 0;
 unsigned long pumpLastOnElapsed = 0;
 unsigned int pumpTotalCounter = 0;
 unsigned long pumpTotalElapsed = 0;
-
-String cmdOutput;
+unsigned long ntpLastRunAt = 0;
 
 BlynkTimer timer;
-WidgetTerminal terminal(V9);
-// libraries/ESP8266WiFi/src/ESP8266WiFiType.h
 WiFiEventHandler wh1, wh2, wh3;
 
+void fileStatus();
 void statusReport();
 void pumpReport();
+String getStatusJson(bool);
+String getStatusText();
 String listFiles();
 void webSerialRecv(uint8_t* data, size_t len);
 void handleWebSerialCmd(const String& cmd);
@@ -80,6 +83,7 @@ void handleRequestDeleteFile(AsyncWebServerRequest* req);
 void handleRequestGetFiles(AsyncWebServerRequest* req);
 void handleRequestGetLogs(AsyncWebServerRequest* req);
 void handleRequestGetData(AsyncWebServerRequest* req);
+void handleOTARedirect(AsyncWebServerRequest* req);
 void handleOTAUpdate(AsyncWebServerRequest*,
                      const String&,
                      size_t,
@@ -114,7 +118,22 @@ void fileLog(const String& text, bool appendDate) {
   if (c) {
     Serial.printf("[Log] %u bytes log written to file.\n", c);
   }
-  terminal.println(message);
+}
+
+void fileStatus() {
+  File file = SPIFFS.open(STATUS_FILE, "w");
+  if (file) {
+    // file.println("========== BEGIN ==========");
+    // file.print(status);
+    // file.println("=========== END ===========");
+    // file.print("Created At: ");
+    file.println(getStatusJson(true));
+    file.close();
+    // file.println();
+    Serial.println(F("[Log] Write status file ok."));
+  } else {
+    Serial.println(F("[Log] Write status file failed."));
+  }
 }
 
 void saveConfig() {
@@ -162,30 +181,29 @@ byte isOTAUpdated() {
   return b;
 }
 
-void ntpSetup() {
+void setupNTP() {
   ntp.begin();
 }
 
 time_t ntpSync() {
   ntp.update();
-  yield();
   if (ntp.getEpochTime() < TIME_START) {
     // invalid time
     return 0;
   }
-  Serial.print("[NTP] Time:");
-  Serial.print(ntp.getFormattedTime());
-  Serial.print(", Epoch:");
-  Serial.print(ntp.getEpochTime());
-  Serial.print(", Millis: ");
-  Serial.println(millis());
+  ntpLastRunAt = ntp.getEpochTime();
+  Serial.print("[NTP] Synced, Curent Time:");
+  Serial.print(dateTimeString(ntp.getEpochTime()));
+  Serial.print(", Up Time: ");
+  Serial.println(humanTimeMs(millis()));
   ntpInitialized = true;
   return ntp.getEpochTime();
 }
 
 void ntpUpdate() {
+  Serial.println("[NTP] ntp Update.");
   ntpSync();
-  if (timeStatus() != timeSet) {
+  if (ntp.getEpochTime() > TIME_START) {
     setTime(ntp.getEpochTime());
   }
 }
@@ -390,6 +408,75 @@ void handleRequestGetLogs(AsyncWebServerRequest* req) {
   req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
 }
 
+String getStatusJson(bool pretty) {
+  StaticJsonDocument<512> doc;
+  doc["ts"] = now();
+  doc["name"] = WiFi.hostname();
+  doc["ssid"] = WiFi.SSID();
+  doc["ip"] = WiFi.localIP().toString();
+  //   doc["mac"] = WiFi.macAddress();
+  doc["on"] = digitalRead(pumpPin) == HIGH;
+  doc["lastAt"] = pumpLastOnAt;
+  doc["lastElapsed"] = pumpLastOnElapsed;
+  doc["interval"] = runInterval;
+  doc["duration"] = runDuration;
+  doc["wifiPeriod"] = wifiInterval;
+  doc["updatePeriod"] = updateInterval;
+  doc["ntpPeriod"] = ntpInterval;
+  doc["ntpLast"] = ntpLastRunAt;
+  doc["switch"] = globalSwitchOn;
+
+#ifdef DEBUG_MODE
+  doc["debug"] = true;
+#endif
+  String json;
+  if (pretty) {
+    serializeJsonPretty(doc, json);
+  } else {
+    serializeJson(doc, json);
+  }
+
+  return json;
+}
+String getStatusText() {
+  String desp = "[Status] ";
+  desp += "Board:";
+  desp += WiFi.hostname();
+  desp += ", Global Switch:";
+  desp += globalSwitchOn ? "On" : "Off";
+  desp += (", IP:");
+  desp += (WiFi.localIP().toString());
+  desp += (", SSID:");
+  desp += (WiFi.SSID());
+  desp += (", WiFi Status:");
+  desp += (WiFi.status());
+  desp += ", DateTime:";
+  desp += nowString();
+  desp += (", UpTime:");
+  desp += humanTimeMs(millis());
+  desp += (", lastRunAt=");
+  desp += (dateTimeString(pumpLastOnAt));
+  desp += (", lastOnElapsed=");
+  desp += pumpLastOnElapsed;
+  desp += ("s, totalElapsed=");
+  desp += pumpTotalElapsed;
+  desp += (", runInterval=");
+  desp += humanTimeMs(runInterval);
+  desp += (", runDuration=");
+  desp += humanTimeMs(runDuration);
+  desp += (", wifiInterval=");
+  desp += humanTimeMs(wifiInterval);
+  desp += ("s, ntpInterval=");
+  desp += humanTime(ntpInterval);
+  desp += (", ntpLastRunAt=");
+  desp += dateTimeString(ntpLastRunAt);
+  desp += ", Free Stack:";
+  desp += ESP.getFreeContStack();
+  desp += ", Free Heap:";
+  desp += ESP.getFreeHeap();
+  return desp;
+}
+
 void handleRequestGetData(AsyncWebServerRequest* req) {
   //   Serial.printf("[System] Free Stack: %d, Free Heap: %d\n",
   //                 ESP.getFreeContStack(), ESP.getFreeHeap());
@@ -404,14 +491,21 @@ void handleRequestGetData(AsyncWebServerRequest* req) {
   doc["lastElapsed"] = pumpLastOnElapsed;
   doc["period"] = runInterval;
   doc["duration"] = runDuration;
-  doc["w_period"] = checkWifiInterval;
-  doc["r_period"] = reportInterval;
+  doc["wifiPeriod"] = wifiInterval;
+  doc["wifiStatus"] = WiFi.status();
+  doc["updatePeriod"] = updateInterval;
+  doc["ntpPeriod"] = ntpInterval;
+  doc["ntpLast"] = ntpLastRunAt;
   doc["switch"] = globalSwitchOn;
 
 #ifdef DEBUG_MODE
   doc["debug"] = true;
 #endif
   serializeJsonPretty(doc, Serial);
+}
+
+void handleOTARedirect(AsyncWebServerRequest* req) {
+  req->redirect("/www/update.html");
 }
 
 void handleOTAUpdate(AsyncWebServerRequest* request,
@@ -421,7 +515,7 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
                      size_t len,
                      bool final) {
   if (!index) {
-    Serial.println("[OTA] Update begin, firmware: " + filename);
+    Serial.println("[OTA] Update begin, file: " + filename);
     size_t conentLength = request->contentLength();
     // if filename includes spiffs, update the spiffs partition
     int cmd = (filename.indexOf("spiffs") > -1) ? U_SPIFFS : U_FLASH;
@@ -481,6 +575,7 @@ void setupServer() {
   server.on("/j/get_files", HTTP_GET, handleRequestGetFiles);
   server.on("/j/get_logs", HTTP_GET, handleRequestGetLogs);
   server.on("/j/get_data", HTTP_GET, handleRequestGetData);
+  server.on("/ota", HTTP_GET, handleOTARedirect);
   server.on("/www/update.html", HTTP_POST,
             [](AsyncWebServerRequest* request) {},
             [](AsyncWebServerRequest* request, const String& filename,
@@ -541,52 +636,6 @@ void setupWiFi() {
   wifiInitialized = true;
 }
 
-// for led pin
-BLYNK_WRITE(V0)  // Button Widget is writing to pin V0
-{
-  int v = param.asInt();
-  Serial.printf("[Blynk] value %d received at V0\n", v);
-  digitalWrite(ledPin, !v);
-}
-
-// for pump pin
-BLYNK_WRITE(V1)  // Button Widget is writing to pin V1
-{
-  int v = param.asInt();
-  Serial.printf("[Blynk] value %d received at V1\n", v);
-  handlePump0(v == HIGH);
-}
-
-// for get report
-BLYNK_WRITE(V2)  // Button Widget is writing to pin V2
-{
-  int v = param.asInt();
-  Serial.printf("[Blynk] value %d received at V2\n", v);
-  if (v == HIGH) {
-    statusReport();
-  }
-}
-
-// for blynk terminal
-BLYNK_WRITE(V9)  // Button Widget is writing to pin V9
-{
-  Serial.printf("[Blynk] value %s received at V9\n", param.asStr());
-  if (String("/help") == param.asStr()) {
-    terminal.println("Commands: /status, /start, /stop, /help");
-  } else if (String("/status") == param.asStr()) {
-    statusReport();
-  } else if (String("/start") == param.asStr()) {
-    startPump();
-  } else if (String("/stop") == param.asStr()) {
-    stopPump();
-  }
-}
-
-BLYNK_CONNECTED() {
-  Serial.println("[Blynk] Connected!");
-  //   Blynk.syncAll();
-}
-
 void checkWiFi() {
   Serial.print("[WiFi] Status: ");
   Serial.print(WiFi.status());
@@ -598,14 +647,10 @@ void checkWiFi() {
   //   Serial.print(WiFi.RSSI());
   Serial.print(", Time: ");
   Serial.println(timeString());
+  fileStatus();
   if (!WiFi.isConnected()) {
     Serial.println("[WiFi] connection lost, reconnecting...");
     WiFi.reconnect();
-  } else {
-    // statusReport();
-    if (!ntpInitialized) {
-      ntpUpdate();
-    }
   }
 }
 
@@ -617,9 +662,9 @@ String listFiles() {
     Serial.printf("[File] %s (%d bytes)\n", dir.fileName().c_str(),
                   dir.fileSize());
     output += dir.fileName();
-    output += " (";
-    output += dir.fileSize();
-    output += ")";
+    // output += " (";
+    // output += dir.fileSize();
+    // output += ")";
     output += "\n";
   };
   return output;
@@ -633,29 +678,31 @@ void setupData() {
   bool debugMode = false;
 #ifdef DEBUG_MODE
   debugMode = true;
-  runInterval = 3 * 60 * 1000L;        // 3min
-  runDuration = 12 * 1000L;            // 12s
-  reportInterval = 5 * 60 * 1000L;     // 5min
-  checkWifiInterval = 2 * 60 * 1000L;  // 2min
+  runInterval = 3 * 60 * 1000L;     // 3min
+  runDuration = 12 * 1000L;         // 12s
+  updateInterval = 5 * 60 * 1000L;  // 5min
+  ntpInterval = 8 * 60;             // 8min, in seconds
+  wifiInterval = 2 * 60 * 1000L;    // 2min
 #else
   debugMode = false;
-  runInterval = 8 * 3600 * 1000L;      // 8 * 3 = 24 hours
-  runDuration = 20 * 1000L;            // 60/3=20 seconds
-  reportInterval = 6 * 3600 * 1000L;   // 6hours
-  checkWifiInterval = 5 * 60 * 1000L;  // 5min
+  runInterval = 8 * 3600 * 1000L;     // 8 * 3 = 24 hours
+  runDuration = 20 * 1000L;           // 60/3=20 seconds
+  updateInterval = 4 * 3600 * 1000L;  // 4hours
+  ntpInterval = 2 * 3600;             // 2 hours
+  wifiInterval = 10 * 60 * 1000L;     // 10min
 #endif
   Serial.printf("[System] setupData, debugMode=%s\n",
                 debugMode ? "True" : "False");
 }
 
 void setTimers() {
-  setSyncInterval(24 * 60 * 60);  // in seconds = 1 days
+  setSyncInterval(ntpInterval);  // in seconds = 1 days
   setSyncProvider(ntpSync);
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
   //   timer.setInterval(5 * 60 * 1000L, statusReport);
-  timer.setInterval(checkWifiInterval, checkWiFi);  // in milliseconds
+  timer.setInterval(wifiInterval, checkWiFi);  // in milliseconds
   timer.setInterval(runInterval, startPump);
-  timer.setInterval(reportInterval, statusReport);
+  timer.setInterval(updateInterval, statusReport);
 }
 
 void setup() {
@@ -674,74 +721,35 @@ void setup() {
   if (isOTAUpdated()) {
     Serial.println("[System] OTA Updated! " + ESP.getSketchMD5());
   }
-  //----------
   loadConfig();
   setupData();
   setupWiFi();
-  setupServer();
-  ntpSetup();
-  ntpUpdate();
+  setupNTP();
   setTimers();
-//   Blynk.begin(blynkAuth, ssid, pass);
-  // You can also specify server:
-  // Blynk.begin(auth, ssid, pass, "blynk-cloud.com", 80);
-  // Blynk.begin(auth, ssid, pass, IPAddress(192,168,1,100), 8080);
-  fileLog("[System] ESP8266 Board powered on at " + nowString());
-  //   listFiles();
+  setupServer();
+  saveConfig();
+  listFiles();
   statusReport();
+  fileLog("[System] ESP8266 Board powered on at " + nowString());
 }
 
 void loop() {
-//   Blynk.run();
   timer.run();
-}
-
-String buildStatusDesp() {
-  String desp = "Pump Server is running";
-  desp += ", Board:";
-  desp += WiFi.hostname();
-//   desp += ", Free Stack:";
-//   desp += ESP.getFreeContStack();
-//   desp += ", Free Heap:";
-//   desp += ESP.getFreeHeap();
-  desp += ", Global Switch:";
-  desp += globalSwitchOn ? "On" : "Off";
-  desp += ", DateTime:";
-  desp += nowString();
-  desp += (", UpTime:");
-  desp += humanTimeMs(millis());
-  desp += (", SSID:");
-  desp += (WiFi.SSID());
-  desp += (", IP:");
-  desp += (WiFi.localIP().toString());
-  desp += (", runInterval=");
-  desp += humanTimeMs(runInterval);
-  desp += (", runDuration=");
-  desp += humanTimeMs(runDuration);
-  desp += (", checkWifiInterval=");
-  desp += humanTimeMs(checkWifiInterval);
-  desp += (", lastRunAt=");
-  desp += (dateTimeString(pumpLastOnAt));
-  desp += (", lastRunDuration=");
-  desp += pumpLastOnElapsed;
-  desp += ("s, totalDuration=");
-  desp += pumpTotalElapsed;
-  desp += "s";
-  return desp;
 }
 
 void statusReport() {
   static int srCount = 0;
   String data = "text=";
-  data += urlencode("Pump_Status_");
+  data += urlencode("Pump_");
+  data += urlencode(WiFi.hostname());
+  data += urlencode("_Status_");
 #ifdef DEBUG_MODE
   data += urlencode("DEBUG_");
 #endif
-  String desp = buildStatusDesp();
   data += (++srCount);
+  String desp = getStatusText();
   data += "&desp=";
   data += urlencode(desp);
-  Serial.print("[Report] ");
   Serial.println(desp);
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
@@ -763,24 +771,23 @@ void pumpReport() {
 #ifdef DEBUG_MODE
   debugMode = true;
 #endif
-  Serial.print("[Report] Pump is ");
-  Serial.print(isOn ? "Started" : "Stopped");
-  Serial.print(" at ");
-  Serial.print(nowString());
-  Serial.print(" debugMode: ");
-  Serial.println(debugMode ? "True" : "False");
+  Serial.printf("[Report] Pump is %s at %s debugMode: %s\n",
+                isOn ? "Started" : "Stopped", nowString().c_str(),
+                (debugMode ? "True" : "False"));
 
   String data = "text=";
   data += urlencode("Pump_");
-  data += urlencode(isOn ? "Started" : "Stopped");
+  data += urlencode(WiFi.hostname());
+  data += urlencode(isOn ? "_Started" : "_Stopped");
   data += urlencode(debugMode ? "_DEBUG_" : "_");
   data += pumpTotalCounter;
   data += "&desp=";
-
   String desp = "Pump";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
   desp += timeString();
+  desp += ", IP: ";
+  desp += WiFi.localIP().toString();
   desp += ", Total: ";
   desp += pumpTotalElapsed;
   desp += "s";
@@ -791,12 +798,13 @@ void pumpReport() {
   }
   desp += " (";
   desp += pumpTotalCounter;
-  desp += ")";
+  desp += ") ";
   fileLog(desp);
+  desp += getStatusText();
   data += urlencode(desp);
-  Serial.printf("[Report] %s Action Report is sent to server.\n",
-                WiFi.hostname().c_str());
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
+  Serial.printf("[Report] %s Pump Report is sent to server.\n",
+                WiFi.hostname().c_str());
 #endif
 }
