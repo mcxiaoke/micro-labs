@@ -5,6 +5,8 @@
     <meta charset="UTF-8" />
     <title>Pump Commands</title>
     <link rel="stylesheet" type="text/css" href="main.css" />
+    <script src="//cdn.staticfile.org/moment.js/2.24.0/moment.min.js"></script>
+    <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script>
 </head>
 
 <body>
@@ -14,7 +16,7 @@
         <div>
             <form id="delete-form" action="/j/delete_file" method="POST">
                 <input type="text" name="file_path" id="file_path" />
-                <button type="submit" id="submit">
+                <button id="delete-submit">
                     Delete File
                 </button>
             </form>
@@ -22,59 +24,18 @@
         <p></p>
         <a href="/"><button>Home</button></a>
         <form id="list-form" action="/j/get_files" method="GET">
-            <button type="submit">List Files</button>
+            <button id="list-submit">List Files</button>
         </form>
         <a href="update.html"><button>OTA Update</button></a>
         <form action="/j/reset_board" method="POST">
-            <button type="submit" onclick="return confirm('Are you sure to reboot board?')">
+            <button onclick="return confirm('Are you sure to reboot board?')">
                 Reboot
             </button>
         </form>
         <hr />
         <div class="output" id="output"></div>
     </div>
-    <script>
-        var d = document;
-        var form1 = d.getElementById('delete-form');
-        form1.onsubmit = function () {
-            if (!confirm("Are you sure to delete this file?")) {
-                return false;
-            }
-            var formData = new FormData(form1);
-            xhr = new XMLHttpRequest();
-            xhr.addEventListener('load', function (event) {
-                if (xhr.status === 200) {
-                    d.getElementById("output").innerHTML = "<p>" + xhr.responseText + "</p>";
-                }
-                else {
-                    d.getElementById("output").innerHTML = "<p>" + xhr.statusText + "</p>";;
-                }
-            });
-            xhr.open('POST', form1.getAttribute('action'));
-            xhr.send(formData);
-            return false;
-        }
-        var form2 = d.getElementById('list-form');
-        form2.onsubmit = function () {
-            var xhr = new XMLHttpRequest();
-            xhr.onload = function () {
-                if (xhr.status === 200) {
-                    var outputText = xhr.responseText.split(/\n/).map((it) => "<p><a href='"
-                        + it.trim()
-                        + "' target='_blank'>"
-                        + it + "</a></p>").join("\n");
-                    d.getElementById("output").innerHTML = outputText;
-                } else {
-                    console.error("Failed: " + xhr.statusText);
-                    d.getElementById("output").innerHTML = "<p>Error: " + xhr.statusText + "</p>";
-                }
-            };
-            xhr.open('GET', form2.getAttribute('action'));
-            xhr.send();
-            // To avoid actual submission of the form
-            return false;
-        }
-    </script>
+    <script src="cmd.js"></script>
 </body>
 
 </html>

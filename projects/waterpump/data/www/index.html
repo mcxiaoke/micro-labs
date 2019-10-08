@@ -4,58 +4,16 @@
 <head>
     <meta charset="UTF-8" />
     <title>Pump Home</title>
-    <link rel="stylesheet" type="text/css" href="/www/main.css" />
+    <link rel="stylesheet" type="text/css" href="main.css" />
+    <script src="//cdn.staticfile.org/moment.js/2.24.0/moment.min.js"></script>
+    <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script>
+    <!-- <script src="//cdn.staticfile.org/umbrella/3.1.0/umbrella.min.js"></script> -->
 </head>
 
 <body>
-    <div class="content">
-        <h1>Pump Home %DEBUG%</h1>
-        <hr />
-        <div class="output" id="output">
-            <p id="switch_label" style="color: red">Global Switch: %SWITCH_LABEL%</p>
-            <p id="pump_label">Pump Status: %PUMP_LABEL% (%DATE_TIME%)</p>
-            <p>Last RunAt: %PUMP_RUN_AT%, Elapsed: %PUMP_RUN_ELAPSED%</p>
-            <p>Next RunAt: %PUMP_NEXT_AT%, Remains: %PUMP_NEXT_REMAINS%</p>
-            <p>Task Interval: %PUMP_INTERVAL%, Task Duration: %PUMP_DURATION%</p>
-        </div>
-        <hr />
-        <div>
-            <form action="/j/toggle_pump?action=%PUMP_ACTION%" method="POST">
-                <button type="submit" id="pump_submit">%PUMP_SUBMIT%</button>
-            </form>
-            <form action="/j/toggle_switch?action=%SWITCH_ACTION%" method="POST">
-                <button type="submit" id="switch_submit">%SWITCH_SUBMIT%</button>
-            </form>
-        </div>
-        <p></p>
-        <div>
-            <button onclick="location.href='/www/logs.html'" type="button">
-                View Logs
-            </button>
-            <form action="/file/pump.log">
-                <button type="submit">Full Logs</button>
-            </form>
-            <form action="/j/clear_logs" method="POST">
-                <button type="submit" onclick="return confirm('Are you sure to delete all logs?')">
-                    Clear Logs
-                </button>
-            </form>
-            <form action="/www/cmd.html">
-                <button type="submit">Commands</button>
-            </form>
-        </div>
-        <hr>
-        <div class="output">
-
-        </div>
+    <div class="content" id="content">
     </div>
-    <script>
-        window.addEventListener('DOMContentLoaded', (e) => {
-            var pumpSubmit = document.getElementById("pump_submit");
-            var switchLabel = document.getElementById("switch_label").textContent;
-            pumpSubmit.disabled = !switchLabel.includes("On");
-        });
-    </script>
+    <script src="main.js"></script>
 </body>
 
 </html>
