@@ -176,9 +176,9 @@ void loadConfig() {
   if (error) {
     Serial.println(F("[Config] Failed to load json config."));
   }
-  Serial.println(F("[Config] loadConfig: "));
-  serializeJsonPretty(doc, Serial);
-  Serial.println();
+  //   Serial.println(F("[Config] loadConfig: "));
+  //   serializeJsonPretty(doc, Serial);
+  //   Serial.println();
   globalSwitchOn = doc["switch"] | true;
   file.close();
 }
@@ -377,12 +377,12 @@ void handleClearLogs(AsyncWebServerRequest* req) {
   bool removed = SPIFFS.remove(PUMP_LOG_FILE);
   Serial.print(F("[Server] Pump logs cleared, result: "));
   Serial.println(removed ? "success" : "fail");
-  req->redirect("/");
+  req->send(removed ? 200 : 403);
 }
 
 void handleResetBoard(AsyncWebServerRequest* req) {
   Serial.print(F("[Server] Pump is rebooting..."));
-  req->redirect("/");
+  req->send(200);
   server.end();
   ESP.restart();
 }
@@ -765,7 +765,8 @@ void setup() {
   setupServer();
   setupTimers();
   saveConfig();
-  listFiles();
+  //   listFiles();
+  //   showESP();
   statusReport();
   //   PGM_P xyz = PSTR("[System] ESP8266 Board powered on at ");
   fileLog("[System] ESP8266 Board powered on at " + nowString());

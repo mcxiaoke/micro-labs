@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pump Files</title>
+    <link rel="stylesheet" type="text/css" href="main.css" />
+    <script src="//cdn.staticfile.org/moment.js/2.24.0/moment.min.js"></script>
+    <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script>
+</head>
+
+<body>
+    <div class="content">
+        <h1>Pump Files</h1>
+        <hr />
+        <form id="delete-form" action="/j/delete_file" method="POST">
+            <input type="text" name="file_path" id="file_path" />
+            <button id="delete-submit">
+                Delete File
+            </button>
+        </form>
+        <form id="list-form" action="/j/get_files" method="GET">
+            <button id="list-submit">List Files</button>
+        </form>
+        <a href="/"><button>Home</button></a>
+        <hr />
+        <div class="output" id="output"></div>
+    </div>
+    <script src="files.js"></script>
+</body>
+
+</html>

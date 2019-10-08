@@ -1,5 +1,5 @@
 // const HumanElapsed = require('human-elapsed')
-const baseUrl = "http://192.168.100.7";
+const baseUrl = "";
 
 var parseHTML = function (str) {
     var tmp = document.implementation.createHTMLDocument();
@@ -91,7 +91,7 @@ function buildFormDiv(d) {
     return $('<div>').attr('id', 'form-div').append(pf, sf, $('<p>'));
 }
 
-function buildButtonDiv(d) {
+function buildButtonDiv() {
     var buttonDiv = document.createElement("div");
     buttonDiv.setAttribute("id", "button-div");
 
@@ -103,7 +103,9 @@ function buildButtonDiv(d) {
     var btnRaw = document.createElement("button");
     btnRaw.textContent = "Raw Logs";
     btnRaw.setAttribute("id", "btn-raw");
-    btnRaw.onclick = e => (window.location.href = baseUrl + "/file/pump.log");
+    btnRaw.onclick = e => {
+        window.open('/file/pump.log', '_blank')
+    };
 
     var btnClear = document.createElement("button");
     btnClear.textContent = "Clear Logs";
@@ -116,7 +118,7 @@ function buildButtonDiv(d) {
             xhr = new XMLHttpRequest();
             xhr.onreadystatechange = function () {
                 if (xhr.readyState == 4) {
-                    if (xhr.status < 300) {
+                    if (xhr.status < 400) {
                         alert('Server logs is cleared!');
                         console.log("Clear logs ok.");
                     }
@@ -129,19 +131,49 @@ function buildButtonDiv(d) {
         return false;
     };
 
-    var btnCmd = document.createElement("button");
-    btnCmd.textContent = "Commands";
-    btnCmd.setAttribute("id", "btn-cmd");
-    btnCmd.onclick = e => (window.location.href = baseUrl + "/www/cmd.html");
-    buttonDiv.append(btnLogs, btnRaw, btnClear, btnCmd);
+    var btnFiles = document.createElement("button");
+    btnFiles.textContent = "List Files";
+    btnFiles.setAttribute("id", "btn-files");
+    btnFiles.onclick = e => (window.location.href = baseUrl + "/www/files.html");
+
+    var btnOTA = document.createElement("button");
+    btnOTA.textContent = "OTA Update";
+    btnOTA.setAttribute("id", "btn-ota");
+    btnOTA.onclick = e => (window.location.href = baseUrl + "/www/update.html");
+
+    var btnReset = document.createElement("button");
+    btnReset.textContent = "Reboot";
+    btnReset.setAttribute("id", "btn-reset");
+    btnReset.onclick = function (e) {
+        var cf = confirm("Are you sure to reboot board?");
+        if (cf) {
+            e.preventDefault();
+            xhr = new XMLHttpRequest();
+            xhr.onload = function () {
+                if (xhr.status < 400) {
+                    alert('Board will reboot!');
+                }
+            };
+            xhr.open("POST", baseUrl + "/j/reset_board");
+            xhr.send();
+            return true;
+        }
+        return false;
+    };
+
+    var hr = document.createElement('p');
+
+    buttonDiv.append(btnLogs, btnRaw, btnClear, hr, btnFiles, btnOTA, btnReset);
     return buttonDiv;
 }
 
-function loadData() {
-    function handleError(e) {
-        $('#content').append($('<p>').text('Failed to load data.'));
-    }
+function handleError(e) {
+    var outputDiv = $('<div>').attr('id', 'output').attr('class', 'output');
+    outputDiv.append($('<p>').text('Failed to load data.'));
+    $('#content').append(outputDiv, buildButtonDiv());
+}
 
+function loadData() {
     var xhr = new XMLHttpRequest();
     xhr.timeout = 3000;
     xhr.ontimeout = function (e) {
@@ -167,12 +199,9 @@ function loadData() {
             t.textContent = "Pump Home";
             // c.append(t, buildOutputDiv(d), buildFormDiv(d), buildButtonDiv(d));
 
-            $('#content').append(t, buildOutputDiv(d), buildFormDiv(d), buildButtonDiv(d));
+            $('#content').append(t, buildOutputDiv(d), buildFormDiv(d), buildButtonDiv());
         } else {
-            var c = document.getElementById("content");
-            var t = document.createElement('p');
-            t.textContent = "ERROR " + xhr.status;
-            c.appendChild(t);
+            handleError(e);
         }
     };
     xhr.open("GET", baseUrl + "/j/get_status_json");
