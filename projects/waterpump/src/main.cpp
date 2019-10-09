@@ -215,11 +215,11 @@ void ntpUpdate() {
 }
 
 void onWiFiConnected(const WiFiEventStationModeConnected& evt) {
-  digitalWrite(ledPin, LOW);
+  digitalWrite(ledPin, HIGH);
 }
 
 void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
-  digitalWrite(ledPin, HIGH);
+  digitalWrite(ledPin, LOW);
   Serial.print(F("[WiFi] Connection lost from "));
   Serial.print(evt.ssid);
   Serial.print(F(", Reason:"));
@@ -227,7 +227,7 @@ void onWiFiDisconnected(const WiFiEventStationModeDisconnected& evt) {
 }
 
 void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
-  digitalWrite(ledPin, LOW);
+  digitalWrite(ledPin, HIGH);
   String msg = "[WiFi] Connected to ";
   msg += WiFi.SSID();
   msg += " IP: ";
@@ -266,7 +266,7 @@ void handleRoot(AsyncWebServerRequest* req) {
   Serial.println(isOn ? "On" : "Off");
   //   req->send_P(200, "text/html", ROOT_PAGE_TPL, processor);
   req->send(SPIFFS, "/www/index.html", String(), false);
-  showPumpTaskInfo();
+//   showPumpTaskInfo();
 }
 
 void handlePump0(bool turnOn) {
@@ -279,15 +279,15 @@ void handlePump0(bool turnOn) {
     Serial.println(F("[Pump] status not changed, ignore."));
     return;
   }
-  unsigned long elapsed = 0;
-  if (pumpStartedMs > 0) {
-    // in seconds
-    elapsed = (millis() - pumpStartedMs + 1.0f) / 1000.0;
-  }
   Serial.print(F("[Pump] Pump last status is "));
   Serial.print(isOn ? "Running" : "Idle");
   if (isOn) {
     // will stop
+    unsigned long elapsed = 0;
+    if (pumpStartedMs > 0) {
+      // in seconds
+      elapsed = (millis() - pumpStartedMs) / 1000.0;
+    }
     Serial.print(", Elapsed: ");
     Serial.print(elapsed);
     Serial.print("s");
@@ -310,7 +310,7 @@ void pumpWatchDog() {
   Serial.printf("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
                 timeString(pumpLastOnAt).c_str(), timeString().c_str(),
                 status == 1 ? "On" : "Off");
-  //   showESP();
+    // showESP();
   if (pumpStartedMs > 0 && millis() - pumpStartedMs > runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
       handlePump0(false);
@@ -333,6 +333,7 @@ void stopPump() {
 void handlePump(AsyncWebServerRequest* req) {
   Serial.print(F("[Server] handlePump url="));
   Serial.print(req->url());
+  Serial.println();
   if (!req->hasArg("action")) {
     req->redirect("/");
     return;
@@ -684,6 +685,7 @@ void setupNTP() {
 }
 
 void setupWiFi() {
+  digitalWrite(ledPin, LOW);
   wifiMgr.addAP(ap1_ssid, ap1_pass);
   wifiMgr.addAP(ap2_ssid, ap2_pass);
   WiFi.mode(WIFI_STA);
@@ -840,6 +842,7 @@ void statusReport() {
 
 void pumpReport() {
   Serial.println(F("[Server] Pump report."));
+//   showESP();
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (isOn) {
     pumpTotalCounter++;
@@ -866,7 +869,7 @@ void pumpReport() {
   String desp = "Pump";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
-  desp += timeString();
+  desp += timeString(pumpLastOnAt);
   desp += ", Total Elapsed: ";
   desp += humanTime(pumpTotalElapsed);
   if (!isOn) {
@@ -880,7 +883,7 @@ void pumpReport() {
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
   desp += ", IP: ";
   desp += WiFi.localIP().toString();
-  desp.replace(", ", "\n");
+//   desp.replace(", ", "\n");
   data += urlencode(desp);
   desp = "";
 #ifndef DEBUG_MODE

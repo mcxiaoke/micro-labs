@@ -58,7 +58,7 @@ function buildOutputDiv(d) {
             moment.unix(d["ts"]).format("YYYY-MM-DD HH:mm:ss") + ")")
 
     var lp = $('<p>').attr('id', 'p-last')
-        .text("Last RunAt: " + moment.unix(d["lastAt"]).format("YYYY-MM-DD HH:mm:ss")
+        .text("Last RunAt: " + moment.unix(d["lastAt2"]).format("YYYY-MM-DD HH:mm:ss")
             + ", Elapsed: " + d["lastElapsed"] + "s")
 
     var np = $('<p>').attr('id', 'p-next')
