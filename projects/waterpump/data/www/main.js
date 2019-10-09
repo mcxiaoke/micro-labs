@@ -1,10 +1,16 @@
-// const HumanElapsed = require('human-elapsed')
-const baseUrl = "";
+const baseUrl = "http://192.168.100.4";
 
 var parseHTML = function (str) {
     var tmp = document.implementation.createHTMLDocument();
     tmp.body.innerHTML = str;
     return tmp.body.children;
+};
+
+function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    var results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
 };
 
 var humanElapsedMs = (sec) => humanElapsed(sec / 1000);
@@ -64,8 +70,11 @@ function buildOutputDiv(d) {
         .text("Task Interval: " + humanElapsed(d["interval"] / 1000)
             + ", Task Duration: " + humanElapsed(d["duration"] / 1000))
 
+    var mp = $('<p>').attr('id', 'p-mem')
+        .text('Free Stack: ' + d['stack'] + ', Free Heap: ' + d['heap']);
+
     var o = $('<div>').attr('id', 'output').attr('class', 'output');
-    return o.append(gp, pp, lp, np, tp, $('<hr>'));
+    return o.append(gp, pp, lp, np, tp, mp, $('<hr>'));
 }
 
 function buildFormDiv(d) {
@@ -116,12 +125,10 @@ function buildButtonDiv() {
         if (cf) {
             e.preventDefault();
             xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState == 4) {
-                    if (xhr.status < 400) {
-                        alert('Server logs is cleared!');
-                        console.log("Clear logs ok.");
-                    }
+            xhr.onload = function () {
+                if (xhr.status < 400) {
+                    alert('Server logs is cleared!');
+                    console.log("Clear logs ok.");
                 }
             };
             xhr.open("POST", baseUrl + "/j/clear_logs");
