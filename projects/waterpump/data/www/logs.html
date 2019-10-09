@@ -17,13 +17,12 @@
                 <button type="button" id="reload" onclick="javascript:loadData();">Reload</button>
             </form>
             <form action="/j/clear_logs" method="POST">
-                <button type="submit" onclick="return confirm('Are you sure to delete all logs?')">Clear</button>
+                <button id="clear" type="submit">Clear</button>
             </form>
         </div>
         <hr />
         <div class="output" id="output"></div>
     </div>
-    <!-- <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script> -->
     <script>
         function loadData() {
             var xhr = new XMLHttpRequest();
@@ -43,6 +42,25 @@
         window.addEventListener('DOMContentLoaded', (e) => {
             // call on dom loaded.
             loadData();
+            var btnClear = document.getElementById('clear');
+            btnClear.onclick = function (e) {
+                var cf = confirm("Are you sure to delete all logs?");
+                if (cf) {
+                    e.preventDefault();
+                    xhr = new XMLHttpRequest();
+                    xhr.onload = function () {
+                        if (xhr.status < 400) {
+                            alert('Server logs is cleared!');
+                            console.log("Clear logs ok.");
+                        }
+                        loadData();
+                    };
+                    xhr.open("POST", "/j/clear_logs");
+                    xhr.send();
+                    return true;
+                }
+                return false;
+            };
         });
     </script>
 </body>

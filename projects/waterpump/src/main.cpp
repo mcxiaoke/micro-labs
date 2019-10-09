@@ -307,9 +307,10 @@ void handlePump0(bool turnOn) {
 
 void pumpWatchDog() {
   bool status = digitalRead(pumpPin);
-  Serial.printf("[Watchdog] pump lastRunAt: %s, now: %s (%d)\n",
-                timeString(pumpLastOnAt).c_str(), timeString().c_str(), status);
-  showESP();
+  Serial.printf("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
+                timeString(pumpLastOnAt).c_str(), timeString().c_str(),
+                status == 1 ? "On" : "Off");
+  //   showESP();
   if (pumpStartedMs > 0 && millis() - pumpStartedMs > runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
       handlePump0(false);
@@ -363,7 +364,12 @@ void handleClearLogs(AsyncWebServerRequest* req) {
   bool removed = SPIFFS.remove(PUMP_LOG_FILE);
   Serial.print(F("[Server] Pump logs cleared, result: "));
   Serial.println(removed ? "success" : "fail");
-  req->send(removed ? 200 : 403);
+  req->send(200);
+  File f = SPIFFS.open(PUMP_LOG_FILE, "w");
+  if (f) {
+    f.write((uint8_t)0x00);
+    f.close();
+  }
 }
 
 void handleResetBoard(AsyncWebServerRequest* req) {
@@ -444,7 +450,11 @@ void handleRemoteGetFiles(AsyncWebServerRequest* req) {
 }
 void handleRemoteGetLogs(AsyncWebServerRequest* req) {
   Serial.println(F("[Server] handleRemoteGetLogs"));
-  req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+  if (SPIFFS.exists(PUMP_LOG_FILE)) {
+    req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+  } else {
+    req->send(200, "text/plain", "");
+  }
 }
 
 String getStatusJson(bool pretty) {
@@ -484,36 +494,36 @@ String getStatusJson(bool pretty) {
 String getStatusText() {
   String desp = "Global=";
   desp += globalSwitchOn ? "On" : "Off";
-  desp += (", IP=");
+  desp += ("\nIP=");
   desp += (WiFi.localIP().toString());
-  desp += (", SSID=");
+  desp += ("\nSSID=");
   desp += (WiFi.SSID());
-  desp += (", WiFi Status=");
+  desp += ("\nWiFi Status=");
   desp += (WiFi.status());
-  desp += ", DateTime=";
+  desp += "\nDateTime=";
   desp += nowString();
-  desp += (", UpTime=");
+  desp += ("\nUpTime=");
   desp += humanTimeMs(millis());
-  desp += (", lastRunAt2=");
+  desp += ("\nlastRunAt2=");
   desp += (dateTimeString(pumpLastOnAt));
-  desp += (", lastRunAt=");
+  desp += ("\nlastRunAt=");
   desp += (dateTimeString(now() - timer.getElapsed(runTimerId) / 1000));
-  desp += (", nextRunAt=");
+  desp += ("\nnextRunAt=");
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
-  desp += (", lastOnElapsed=");
-  desp += pumpLastOnElapsed;
-  desp += ("s, totalElapsed=");
-  desp += pumpTotalElapsed;
-  desp += ("s, runInterval=");
+  desp += ("\nlastOnElapsed=");
+  desp += humanTime(pumpLastOnElapsed);
+  desp += ("\ntotalElapsed=");
+  desp += humanTime(pumpTotalElapsed);
+  desp += ("\nrunInterval=");
   desp += humanTimeMs(runInterval);
-  desp += (", runDuration=");
+  desp += ("\nrunDuration=");
   desp += humanTimeMs(runDuration);
-  desp += ", Stack=";
+  desp += "\nStack=";
   desp += ESP.getFreeContStack();
-  desp += ", Heap=";
+  desp += "\nHeap=";
   desp += ESP.getFreeHeap();
 #ifdef DEBUG_MODE
-  desp += ", Debug Mode=true";
+  desp += "\nDebug=true";
 #endif
   return desp;
 }
@@ -677,7 +687,7 @@ void setupWiFi() {
   wifiMgr.addAP(ap1_ssid, ap1_pass);
   wifiMgr.addAP(ap2_ssid, ap2_pass);
   WiFi.mode(WIFI_STA);
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);  // no sleep
+  WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
   WiFi.setAutoReconnect(true);
   wh1 = WiFi.onStationModeConnected(&onWiFiConnected);
   wh2 = WiFi.onStationModeDisconnected(&onWiFiDisconnected);
@@ -736,28 +746,27 @@ void setupData() {
   bool debugMode = false;
 #ifdef DEBUG_MODE
   debugMode = true;
-  runInterval = 3 * 60 * 1000L;            // 3min
-  runDuration = 15 * 1000L;                // 35s
-  updateInterval = 5 * 60 * 1000L;         // 5min
-  watchDogInterval = runDuration / 2 - 1;  // 20s;
-  ntpInterval = 8 * 60 * 1000L;            // 8min
-  wifiInterval = 2 * 60 * 1000L;           // 2min
+  runInterval = 3 * 60 * 1000L;        // 3min
+  runDuration = 15 * 1000L;            // 15s
+  updateInterval = 5 * 60 * 1000L;     // 5min
+  watchDogInterval = runDuration / 2;  // 7s;
+  ntpInterval = 8 * 60 * 1000L;        // 8min
+  wifiInterval = 2 * 60 * 1000L;       // 2min
 #else
   debugMode = false;
-  runInterval = 8 * 3600 * 1000L;          // 8 * 3 = 24 hours
-  runDuration = 20 * 1000L;                // 60/3=20 seconds
-  updateInterval = 4 * 3600 * 1000L;       // 4hours
-  watchDogInterval = runDuration / 2 - 1;  // 25s
-  ntpInterval = 2 * 3600 * 1000L;          // 2 hours
-  wifiInterval = 30 * 60 * 1000L;          // 30min
+  runInterval = 8 * 3600 * 1000L;      // 8 * 3 = 24 hours
+  runDuration = 20 * 1000L;            // 60/3=20 seconds
+  updateInterval = 4 * 3600 * 1000L;   // 4hours
+  watchDogInterval = runDuration / 2;  // 10s
+  ntpInterval = 2 * 3600 * 1000L;      // 2 hours
+  wifiInterval = 30 * 60 * 1000L;      // 30min
 #endif
-  Serial.printf("[System] setupData, debugMode=%s\n",
-                debugMode ? "True" : "False");
+  Serial.printf("[System] setupData, debug=%s\n", debugMode ? "True" : "False");
 }
 
 void setupTimers() {
   Serial.println(F("[System] Setup timers."));
-  setSyncInterval(ntpInterval / 1000);  // in seconds = 1 days
+  setSyncInterval(ntpInterval / 1000);  // in seconds
   setSyncProvider(ntpSync);
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
   //   timer.setInterval(5 * 60 * 1000L, statusReport);
@@ -768,14 +777,13 @@ void setupTimers() {
 }
 
 void setup() {
-  // Debug console
-  // Free Stack:2352, Free Heap:35928
+  // Free Stack: 3904, Free Heap: 42000
   Serial.begin(115200);
   Serial.println();
   delay(1000);
-  Serial.println(F("[System] ESP8266 Board is booting on..."));
-  Serial.println(F("===================="));
+  Serial.println(F("============ SETUP BEGIN ============"));
   showESP();
+  Serial.println(F("[System] Board is booting on..."));
   EEPROM.begin(1024);
   if (!SPIFFS.begin()) {
     Serial.println(F("[System] Failed to mount file system"));
@@ -783,7 +791,7 @@ void setup() {
     Serial.println(F("[System] SPIFFS file system mounted."));
   }
   if (isOTAUpdated()) {
-    Serial.println(F("[System] OTA Updated! "));
+    Serial.println(F("[System] Firmware OTA Updated!"));
   }
 
   loadConfig();
@@ -797,9 +805,9 @@ void setup() {
   //   showESP();
   statusReport();
   //   PGM_P xyz = PSTR("[System] ESP8266 Board powered on at ");
-  fileLog("[System] ESP8266 Board powered on at " + nowString());
+  fileLog("[System] Board started at " + nowString());
   showESP();
-  Serial.println(F("===================="));
+  Serial.println(F("============= SETUP END ============="));
 }
 
 void loop() {
@@ -818,15 +826,14 @@ void statusReport() {
 #endif
   data += (++srCount);
   String desp = getStatusText();
+  desp.replace("\n", "  \n");
   data += "&desp=";
   data += urlencode(desp);
   desp = "";
-//   desp.replace(",", "\n");
-//   Serial.println(desp);
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
   data = "";
-  Serial.printf("[Report] %s status eport (No.%02d) is sent to server.\n",
+  Serial.printf("[Report] %s status report is sent to server. (%d)\n",
                 WiFi.hostname().c_str(), srCount);
 #endif
 }
@@ -860,31 +867,28 @@ void pumpReport() {
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
   desp += timeString();
-  desp += ", Total: ";
-  desp += pumpTotalElapsed;
-  desp += "s";
+  desp += ", Total Elapsed: ";
+  desp += humanTime(pumpTotalElapsed);
   if (!isOn) {
-    desp += ", Elapsed: ";
-    desp += pumpLastOnElapsed;
-    desp += "s";
+    desp += ", Last Elapsed: ";
+    desp += humanTime(pumpLastOnElapsed);
   }
-  desp += " (";
+  desp += ", Count: ";
   desp += pumpTotalCounter;
-  desp += ") ";
   fileLog(desp);
-  desp += " Next at: ";
+  desp += ", Next at: ";
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
-  desp += " <";
+  desp += ", IP: ";
   desp += WiFi.localIP().toString();
-  desp += ">";
+  desp.replace(", ", "\n");
   data += urlencode(desp);
   desp = "";
 #ifndef DEBUG_MODE
   showESP();
   httpsPost(reportUrl, data);
   data = "";
-  Serial.printf("[Report] %s Pump action report is sent to server.\n",
-                WiFi.hostname().c_str());
+  Serial.printf("[Report] %s Pump action report is sent to server. (%d)\n",
+                WiFi.hostname().c_str(), pumpTotalCounter);
   showESP();
 #endif
 }
