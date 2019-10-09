@@ -168,6 +168,9 @@ String humanTimeMs(unsigned long ms) {
 
 // in seconds
 String humanTime(unsigned long sec) {
+  if (sec < 1) {
+    return "0s";
+  }
   // 4010
   // 4010/3600 = 1h
   // 4010%3600 = 410
