@@ -264,9 +264,7 @@ void handleRoot(AsyncWebServerRequest* req) {
   bool isOn = digitalRead(pumpPin) == HIGH;
   Serial.print(F("[Server] handleRoot status="));
   Serial.println(isOn ? "On" : "Off");
-  //   req->send_P(200, "text/html", ROOT_PAGE_TPL, processor);
-  req->send(SPIFFS, "/www/index.html", String(), false);
-//   showPumpTaskInfo();
+  req->redirect("/www/");
 }
 
 void handlePump0(bool turnOn) {
@@ -310,7 +308,7 @@ void pumpWatchDog() {
   Serial.printf("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
                 timeString(pumpLastOnAt).c_str(), timeString().c_str(),
                 status == 1 ? "On" : "Off");
-    // showESP();
+  // showESP();
   if (pumpStartedMs > 0 && millis() - pumpStartedMs > runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
       handlePump0(false);
@@ -600,11 +598,11 @@ void setupServer() {
   //   WebSerial.msgCallback(webSerialRecv);
   server.on("/", HTTP_GET, handleRoot);
   server.onNotFound(handleNotFound);
-  server.serveStatic("/main.css", SPIFFS, "/www/main.css");
-  server.serveStatic("/main.js", SPIFFS, "/www/main.js");
-  server.serveStatic("/cmd.js", SPIFFS, "/www/cmd.js");
   server.serveStatic("/file/", SPIFFS, "/file/");
-  server.serveStatic("/www/", SPIFFS, "/www/").setDefaultFile("index.html");
+  server.serveStatic("/www/", SPIFFS, "/www/")
+      .setLastModified(now() - millis() / 1000)
+      .setCacheControl("max-age=600")
+      .setDefaultFile("index.html");
   server.on("/j/toggle_pump", HTTP_POST, handlePump);
   server.on("/j/toggle_switch", HTTP_POST, handleSwitch);
   server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
@@ -842,7 +840,7 @@ void statusReport() {
 
 void pumpReport() {
   Serial.println(F("[Server] Pump report."));
-//   showESP();
+  //   showESP();
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (isOn) {
     pumpTotalCounter++;
@@ -883,7 +881,7 @@ void pumpReport() {
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
   desp += ", IP: ";
   desp += WiFi.localIP().toString();
-//   desp.replace(", ", "\n");
+  //   desp.replace(", ", "\n");
   data += urlencode(desp);
   desp = "";
 #ifndef DEBUG_MODE

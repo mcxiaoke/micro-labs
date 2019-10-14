@@ -18,12 +18,14 @@ String readLog(const String& path);
 int timedRead(Stream& s);
 size_t countLine(const String& path);   // with yield, only in loop
 size_t countLine2(const String& path);  // without yield, use in anyhwere
+String nowStringGMT();
 String nowString();
 String dateString();
 String timeString();
 String dateString(unsigned long ts);
 String timeString(unsigned long ts);
 String dateTimeString(unsigned long ts);
+String gmtString(unsigned long ts);
 String humanTimeMs(unsigned long ts);
 String humanTime(unsigned long ts);
 void eSetup();
@@ -118,6 +120,10 @@ size_t countLine2(const String& path) {
   return c;
 }
 
+String nowStringGMT() {
+  return gmtString(now());
+}
+
 String nowString() {
   if (now() < TIME_START) {
     return "N/A";
@@ -159,6 +165,17 @@ String dateTimeString(unsigned long ts) {
   char buf[32];
   sprintf(buf, "%04d-%02d-%02d %02d:%02d:%02d", year(ts), month(ts), day(ts),
           hour(ts), minute(ts), second(ts));
+  return String(buf);
+}
+
+String gmtString(unsigned long ts) {
+  ts += TZ_OFFSET;
+  if (ts < TIME_START) {
+    return "N/A";
+  }
+  char buf[36];
+  sprintf(buf, "%s, %02d %s %04d %02d:%02d:%02d GMT", dayShortStr(ts), day(ts),
+          monthShortStr(ts), year(ts), hour(ts), minute(ts), second(ts));
   return String(buf);
 }
 
