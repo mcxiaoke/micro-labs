@@ -5,6 +5,9 @@
     <meta charset="UTF-8" />
     <title>Pump Logs</title>
     <link rel="stylesheet" type="text/css" href="main.css" />
+    <script src="//cdn.staticfile.org/moment.js/2.24.0/moment.min.js"></script>
+    <script src="//cdn.staticfile.org/cash/4.1.5/cash.min.js"></script>
+    <script src="config.js"></script>
 </head>
 
 <body>
@@ -12,57 +15,14 @@
         <h1>Pump Logs</h1>
         <hr />
         <div>
-            <form action="/"><button type="submit">Home</button></form>
-            <form id="reload-form" action="/j/get_logs" , method="GET">
-                <button type="button" id="reload" onclick="javascript:loadData();">Reload</button>
-            </form>
-            <form action="/j/clear_logs" method="POST">
-                <button id="clear" type="submit">Clear</button>
-            </form>
+            <button id="reload" type="button">Reload</button>
+            <button id="clear" type="button">Clear</button>
+            <button id="home" type="button">Home</button>
         </div>
         <hr />
         <div class="output" id="output"></div>
     </div>
-    <script>
-        function loadData() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/j/get_logs');
-            xhr.onload = function () {
-                if (xhr.status === 200) {
-                    var outputText = xhr.responseText.split(/\n/).map((it) => "<p>" + it + "</p>").join("\n");
-                    document.getElementById("output").innerHTML = outputText;
-                } else {
-                    console.error("Failed: " + xhr.statusText);
-                    document.getElementById("output").innerHTML = "<p>Error: " + xhr.statusText + "</p>";
-                }
-            };
-            xhr.send();
-            return false;
-        }
-        window.addEventListener('DOMContentLoaded', (e) => {
-            // call on dom loaded.
-            loadData();
-            var btnClear = document.getElementById('clear');
-            btnClear.onclick = function (e) {
-                var cf = confirm("Are you sure to delete all logs?");
-                if (cf) {
-                    e.preventDefault();
-                    xhr = new XMLHttpRequest();
-                    xhr.onload = function () {
-                        if (xhr.status < 400) {
-                            alert('Server logs is cleared!');
-                            console.log("Clear logs ok.");
-                        }
-                        loadData();
-                    };
-                    xhr.open("POST", "/j/clear_logs");
-                    xhr.send();
-                    return true;
-                }
-                return false;
-            };
-        });
-    </script>
+    <script src="logs.js"></script>
 </body>
 
 </html>

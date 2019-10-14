@@ -1,4 +1,3 @@
-const baseUrl = "http://192.168.100.4";
 
 function loadData(e) {
     var xhr = new XMLHttpRequest();
@@ -6,7 +5,7 @@ function loadData(e) {
         if (xhr.status < 400) {
             var files = xhr.responseText.split('\n').filter(Boolean);
             var lines = files.map(function (it) {
-                var ca = $('<a>').attr('href', baseUrl + it).attr('target', '_blank').text(it);
+                var ca = $('<a>').attr('href', serverUrl + it).attr('target', '_blank').text(it);
                 var aa = $('<button>').text('Delete');
                 aa.on('click', function (e) {
                     var cf = confirm('Are you sure to delete file:[' + it + '] ?');
@@ -20,14 +19,14 @@ function loadData(e) {
                     }
                     var fd = new FormData();
                     fd.append('file_path', it);
-                    ar.open('POST', baseUrl + '/j/delete_file');
+                    ar.open('POST', serverUrl + '/j/delete_file');
                     ar.send(fd);
                 });
                 var da = $('<button>').text('Download');
                 da.on('click', function (e) {
                     var link = document.createElement("a");
                     link.download = it.substring(it.lastIndexOf('/') + 1);
-                    link.href = baseUrl + it;
+                    link.href = serverUrl + it;
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
@@ -51,7 +50,7 @@ function loadData(e) {
     xhr.onerror = function (e) {
         console.error("Failed: " + e);
     }
-    xhr.open('GET', baseUrl + '/j/get_files');
+    xhr.open('GET', serverUrl + '/j/get_files');
     xhr.send();
 }
 

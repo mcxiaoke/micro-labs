@@ -1,7 +1,6 @@
-const baseUrl = "";
 const urlParams = new URLSearchParams(window.location.search);
 const urlPath = urlParams.get('url');
-const url = baseUrl + urlPath;
+const url = serverUrl + urlPath;
 
 function loadData(e) {
     if(!urlPath){
@@ -42,7 +41,7 @@ window.addEventListener("DOMContentLoaded", function (e) {
             var fd = new FormData();
             fd.append('file-path', urlPath);
             fd.append('file-data', $('#text').text());
-            xhr.open("POST", baseUrl + "/j/edit_file");
+            xhr.open("POST", serverUrl + "/j/edit_file");
             // xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             xhr.send(fd);
             return true;
