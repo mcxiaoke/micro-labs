@@ -1,30 +1,52 @@
 function buildOutputDiv(d) {
-    var gp = $('<p>').attr('id', 'p-global')
-        .text("Global Switch: " + (d["switch"] ? "On" : "Off")
-            + (d["debug"] ? "(Debug)" : ""))
+    var tb = $('<table>').append(
+        $('<tr>').attr('id', 'p-status').append(
+            $('<td>').text('Date: '),
+            $('<td>').text(moment.unix(d["ts"]).format("MM-DD HH:mm:ss")),
+            $('<td>').text("Status: "),
+            $('<td>').text((d["on"] ? "Running" : "Idle"))
 
-    var pp = $('<p>').attr('id', 'p-status')
-        .text("Pump Status: " + (d["on"] ? "Running" : "Idle") + " (" +
-            moment.unix(d["ts"]).format("YYYY-MM-DD HH:mm:ss") + ")")
-
-    var lp = $('<p>').attr('id', 'p-last')
-        .text("Last RunAt: " + moment.unix(d["lastAt2"]).format("YYYY-MM-DD HH:mm:ss")
-            + ", Elapsed: " + d["lastElapsed"] + "s")
-
-    var np = $('<p>').attr('id', 'p-next')
-        .text("Next RunAt: " +
-            moment.unix(d["nextAt"]).format("YYYY-MM-DD HH:mm:ss") +
-            ", Remains: " + humanElapsed((d["nextAt"] - moment().unix())))
-
-    var tp = $('<p>').attr('id', 'p-task')
-        .text("Task Interval: " + humanElapsed(d["interval"] / 1000)
-            + ", Task Duration: " + humanElapsed(d["duration"] / 1000))
-
-    var mp = $('<p>').attr('id', 'p-mem')
-        .text('Free Stack: ' + d['stack'] + ', Free Heap: ' + d['heap']);
+        ),
+        $('<tr>').attr('id', 'p-last').append(
+            $('<td>').text("Last RunAt: "),
+            $('<td>').text(moment.unix(d["lastAt2"]).format("MM-DD HH:mm:ss")),
+            $('<td>').text('Elapsed: '),
+            $('<td>').text(d["lastElapsed"] + "s")
+        ),
+        $('<tr>').attr('id', 'p-next').append(
+            $('<td>').text("Next RunAt: "),
+            $('<td>').text(moment.unix(d["nextAt"]).format("MM-DD HH:mm:ss")),
+            $('<td>').text('Remains: '),
+            $('<td>').text(humanElapsed((d["nextAt"] - moment().unix())))
+        ),
+        $('<tr>').attr('id', 'p-status').append(
+            $('<td>').text("Total Elapsed: "),
+            $('<td>').text(d['totalElapsed'] + "s"),
+            $('<td>').text('Up Time: '),
+            $('<td>').text(humanElapsed(d['up']))
+        ),
+        $('<tr>').attr('id', 'p-task').append(
+            $('<td>').text("Task Interval: "),
+            $('<td>').text(humanElapsed(d["interval"] / 1000)),
+            $('<td>').text('Task Duration: '),
+            $('<td>').text(humanElapsed(d["duration"] / 1000))
+        ),
+        $('<tr>').attr('id', 'p-global').append(
+            $('<td>').text("Global Switch: "),
+            $('<td>').text((d["switch"] ? "On" : "Off")),
+            $('<td>').text('Debug: '),
+            $('<td>').text(d["debug"] ? "True" : "False")
+        ),
+        $('<tr>').attr('id', 'p-sys').append(
+            $('<td>').text('Free Stack: '),
+            $('<td>').text(d['stack']),
+            $('<td>').text('Free Heap: '),
+            $('<td>').text(d['heap'])
+        )
+    )
 
     var o = $('<div>').attr('id', 'output').attr('class', 'output');
-    return o.append(gp, pp, lp, np, tp, mp, $('<hr>'));
+    return o.append(tb, $('<p>'));
 }
 
 function buildFormDiv(d) {
@@ -96,7 +118,7 @@ function buildButtonDiv() {
     var btnOTA = document.createElement("button");
     btnOTA.textContent = "OTA Update";
     btnOTA.setAttribute("id", "btn-ota");
-    btnOTA.onclick = e => (window.location.href =  "update.html");
+    btnOTA.onclick = e => (window.location.href = "update.html");
 
     var btnReset = document.createElement("button");
     btnReset.textContent = "Reboot";
@@ -124,22 +146,24 @@ function buildButtonDiv() {
     return buttonDiv;
 }
 
-function handleError(e) {
-    var outputDiv = $('<div>').attr('id', 'output').attr('class', 'output');
-    outputDiv.append($('<p>').text('Failed to load data.'));
-    $('#content').append(outputDiv, buildButtonDiv());
+function handleError(firstTime) {
+    if (firstTime) {
+        var outputDiv = $('<div>').attr('id', 'output').attr('class', 'output');
+        outputDiv.append($('<p>').text('Failed to load data.'));
+        $('#content').append(outputDiv, buildButtonDiv());
+    }
 }
 
-function loadData() {
+function loadData(firstTime) {
     var xhr = new XMLHttpRequest();
     xhr.timeout = 3000;
     xhr.ontimeout = function (e) {
         console.log('ontimeout');
-        handleError(e);
+        handleError(firstTime);
     }
     xhr.onerror = function (e) {
         console.log('onerror');
-        handleError(e);
+        handleError(firstTime);
     }
     xhr.onloadend = function (e) {
         var output = document.createElement('div');
@@ -155,10 +179,10 @@ function loadData() {
             var t = document.createElement("h1");
             t.textContent = "Pump Home";
             // c.append(t, buildOutputDiv(d), buildFormDiv(d), buildButtonDiv(d));
-
+            $('#content').html('');
             $('#content').append(t, buildOutputDiv(d), buildFormDiv(d), buildButtonDiv());
         } else {
-            handleError(e);
+            handleError(firstTime);
         }
     };
     xhr.open("GET", serverUrl + "/j/get_status_json");
@@ -167,6 +191,7 @@ function loadData() {
 }
 
 function onReady(e) {
-    loadData();
+    loadData(true);
+    setInterval(function () { loadData(false); }, 10000);
 }
 window.addEventListener("DOMContentLoaded", onReady);

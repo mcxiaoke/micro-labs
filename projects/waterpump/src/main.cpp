@@ -59,7 +59,7 @@ SimpleTimer timer;
 ESP8266WiFiMulti wifiMgr;
 WiFiEventHandler wh1, wh2, wh3;
 
-void fileStatus();
+void saveStatus();
 void statusReport();
 void pumpReport();
 String getStatusJson(bool);
@@ -70,7 +70,6 @@ void handleWebSerialCmd(const String& cmd);
 void showESP();
 void fileLog(const String& text, bool);
 void fileLog(const String& text);
-void saveConfig();
 void loadConfig();
 void showPumpTaskInfo();
 void handleNotFound(AsyncWebServerRequest* req);
@@ -123,56 +122,38 @@ void fileLog(const String& text, bool appendDate) {
   message += " [";
   message += globalSwitchOn ? "On" : "Off";
   message += "]";
-  size_t c = writeLog(PUMP_LOG_FILE, message);
-  if (c) {
-    Serial.printf("[Log] %u bytes log written to file.\n", c);
-  }
+  writeLog(PUMP_LOG_FILE, message);
+//   if (c) {
+//     Serial.printf("[Log] %u bytes log written to file.\n", c);
+//   }
 }
 
-void fileStatus() {
+void saveStatus() {
   File file = SPIFFS.open(STATUS_FILE, "w");
   if (file) {
-    // file.println("========== BEGIN ==========");
-    // file.print(status);
-    // file.println("=========== END ===========");
-    // file.print("Created At: ");
     file.println(getStatusJson(true));
     file.close();
-    // file.println();
     Serial.println(F("[Log] Write status file ok."));
   } else {
     Serial.println(F("[Log] Write status file failed."));
   }
 }
 
-void saveConfig() {
-  StaticJsonDocument<64> doc;
-  doc["switch"] = globalSwitchOn;
-  doc["ts"] = now();
-  //   SPIFFS.remove(JSON_CONFIG_FILE);
-  File file = SPIFFS.open(JSON_CONFIG_FILE, "w");
-  // Serialize JSON to file
-  if (serializeJson(doc, file) == 0) {
-    Serial.println(F("[Config] Failed to save json config."));
-  }
-  Serial.println(F("[Config] saveConfig: "));
-  serializeJsonPretty(doc, Serial);
-  Serial.println();
-  file.close();
-}
-
 void loadConfig() {
-  File file = SPIFFS.open(JSON_CONFIG_FILE, "r");
+  File file = SPIFFS.open(STATUS_FILE, "r");
   StaticJsonDocument<64> doc;
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
   if (error) {
     Serial.println(F("[Config] Failed to load json config."));
+  } else {
+    globalSwitchOn = doc["switch"] | true;
+    pumpLastOnAt = doc["lastAt2"] | 0;
+    pumpTotalElapsed = doc["totalElapsed"] | 0;
   }
-  //   Serial.println(F("[Config] loadConfig: "));
-  //   serializeJsonPretty(doc, Serial);
-  //   Serial.println();
-  globalSwitchOn = doc["switch"] | true;
+  Serial.println(F("[Config] loadConfig: "));
+  serializeJsonPretty(doc, Serial);
+  Serial.println();
   file.close();
 }
 
@@ -356,7 +337,7 @@ void handleSwitch(AsyncWebServerRequest* req) {
                 isOn);
   globalSwitchOn = action;
   req->redirect("/");
-  saveConfig();
+  saveStatus();
 }
 
 void handleClearLogs(AsyncWebServerRequest* req) {
@@ -459,12 +440,14 @@ void handleRemoteGetLogs(AsyncWebServerRequest* req) {
 String getStatusJson(bool pretty) {
   StaticJsonDocument<512> doc;
   doc["ts"] = now();
+  doc["up"] = millis() / 1000;
   doc["name"] = WiFi.hostname();
   doc["ssid"] = WiFi.SSID();
   doc["ip"] = WiFi.localIP().toString();
   //   doc["mac"] = WiFi.macAddress();
   doc["on"] = digitalRead(pumpPin) == HIGH;
   doc["lastElapsed"] = pumpLastOnElapsed;
+  doc["totalElapsed"] = pumpTotalElapsed;
   // timer or manual last run at
   doc["lastAt2"] = pumpLastOnAt;
   // timer task last run at
@@ -715,7 +698,7 @@ void checkWiFi() {
   //   Serial.print(WiFi.RSSI());
   Serial.print(", Time: ");
   Serial.println(timeString());
-  fileStatus();
+  saveStatus();
   if (!WiFi.isConnected()) {
     Serial.println(F("[WiFi] connection lost, reconnecting..."));
     WiFi.reconnect();
@@ -800,7 +783,6 @@ void setup() {
   setupNTP();
   setupServer();
   setupTimers();
-  saveConfig();
   //   listFiles();
   //   showESP();
   statusReport();
@@ -830,6 +812,7 @@ void statusReport() {
   data += "&desp=";
   data += urlencode(desp);
   desp = "";
+  saveStatus();
 #ifndef DEBUG_MODE
   httpsPost(reportUrl, data);
   data = "";
@@ -884,6 +867,7 @@ void pumpReport() {
   //   desp.replace(", ", "\n");
   data += urlencode(desp);
   desp = "";
+  saveStatus();
 #ifndef DEBUG_MODE
   showESP();
   httpsPost(reportUrl, data);
