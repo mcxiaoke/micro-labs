@@ -6,6 +6,16 @@
 #include <FS.h>
 #include <time.h>
 
+#if DEBUG_MODE
+#define  LOG(...)  Serial.print(__VA_ARGS__)
+#define  LOGN(...)  Serial.println(__VA_ARGS__)
+#define  LOGF(...)  Serial.printf(__VA_ARGS__)
+#else
+#define  LOG(...)  
+#define  LOGN(...)  
+#define  LOGF(...)  
+#endif
+
 #define LEAP_YEAR(Y)                        \
   (((1970 + Y) > 0) && !((1970 + Y) % 4) && \
    (((1970 + Y) % 100) || !((1970 + Y) % 400)))
