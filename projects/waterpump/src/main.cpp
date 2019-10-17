@@ -53,14 +53,13 @@ unsigned long pumpLastOnElapsed = 0;
 unsigned int pumpTotalCounter = 0;
 unsigned long pumpTotalElapsed = 0;
 
-int runTimerId, wifiTimerId, updateTimerId, watchdogTimerId;
+int runTimerId, wifiTimerId, watchdogTimerId;
 
 SimpleTimer timer;
 ESP8266WiFiMulti wifiMgr;
 WiFiEventHandler wh1, wh2, wh3;
 
 void saveStatus();
-void statusReport();
 void pumpReport();
 String getStatusJson(bool);
 String getStatusText();
@@ -123,9 +122,9 @@ void fileLog(const String& text, bool appendDate) {
   message += globalSwitchOn ? "On" : "Off";
   message += "]";
   writeLog(PUMP_LOG_FILE, message);
-//   if (c) {
-//     Serial.printf("[Log] %u bytes log written to file.\n", c);
-//   }
+  //   if (c) {
+  //     Serial.printf("[Log] %u bytes log written to file.\n", c);
+  //   }
 }
 
 void saveStatus() {
@@ -590,6 +589,7 @@ void setupServer() {
   server.on("/j/toggle_switch", HTTP_POST, handleSwitch);
   server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
   server.on("/j/reset_board", HTTP_POST, handleResetBoard);
+  server.on("/j/reboot", HTTP_POST, handleResetBoard);
   server.on("/j/delete_file", HTTP_POST, handleRemoteDeleteFile);
   server.on("/j/get_files", HTTP_GET, handleRemoteGetFiles);
   server.on("/j/edit_file", HTTP_POST, handleRemoteEditFile);
@@ -597,13 +597,23 @@ void setupServer() {
   server.on("/j/get_status_json", HTTP_GET, handleRemoteGetStatusJson);
   server.on("/j/get_status_text", HTTP_GET, handleRemoteGetStatusText);
   server.on("/ota", HTTP_GET, handleOTARedirect);
+  server.on("/update", HTTP_GET, handleOTARedirect);
+  server.on("/ota", HTTP_POST, [](AsyncWebServerRequest* request) {},
+            [](AsyncWebServerRequest* request, const String& filename,
+               size_t index, uint8_t* data, size_t len, bool final) {
+              handleOTAUpdate(request, filename, index, data, len, final);
+            });
+  server.on("/update", HTTP_POST, [](AsyncWebServerRequest* request) {},
+            [](AsyncWebServerRequest* request, const String& filename,
+               size_t index, uint8_t* data, size_t len, bool final) {
+              handleOTAUpdate(request, filename, index, data, len, final);
+            });
   server.on("/www/update.html", HTTP_POST,
             [](AsyncWebServerRequest* request) {},
             [](AsyncWebServerRequest* request, const String& filename,
                size_t index, uint8_t* data, size_t len, bool final) {
               handleOTAUpdate(request, filename, index, data, len, final);
             });
-  //   server.onFileUpload(handleUpload);
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest* request) {
     request->send(200, "text/plain", getStatusText());
   });
@@ -752,10 +762,8 @@ void setupTimers() {
   setSyncInterval(ntpInterval / 1000);  // in seconds
   setSyncProvider(ntpSync);
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
-  //   timer.setInterval(5 * 60 * 1000L, statusReport);
   wifiTimerId = timer.setInterval(wifiInterval, checkWiFi);  // in milliseconds
   runTimerId = timer.setInterval(runInterval, startPump);
-  updateTimerId = timer.setInterval(updateInterval, statusReport);
   watchdogTimerId = timer.setInterval(watchDogInterval, pumpWatchDog);
 }
 
@@ -783,10 +791,7 @@ void setup() {
   setupNTP();
   setupServer();
   setupTimers();
-  //   listFiles();
-  //   showESP();
-  statusReport();
-  //   PGM_P xyz = PSTR("[System] ESP8266 Board powered on at ");
+  saveStatus();
   fileLog("[System] Board started at " + nowString());
   showESP();
   Serial.println(F("============= SETUP END ============="));
@@ -794,31 +799,6 @@ void setup() {
 
 void loop() {
   timer.run();
-}
-
-void statusReport() {
-  Serial.println(F("[Server] Status report."));
-  static int srCount = 0;
-  String data = "text=";
-  data += urlencode("Pump_");
-  data += urlencode(WiFi.hostname());
-  data += urlencode("_Status_");
-#ifdef DEBUG_MODE
-  data += urlencode("DEBUG_");
-#endif
-  data += (++srCount);
-  String desp = getStatusText();
-  desp.replace("\n", "  \n");
-  data += "&desp=";
-  data += urlencode(desp);
-  desp = "";
-  saveStatus();
-#ifndef DEBUG_MODE
-  httpsPost(reportUrl, data);
-  data = "";
-  Serial.printf("[Report] %s status report is sent to server. (%d)\n",
-                WiFi.hostname().c_str(), srCount);
-#endif
 }
 
 void pumpReport() {
@@ -839,30 +819,26 @@ void pumpReport() {
   Serial.printf("[Report] Pump is %s at %s debugMode: %s\n",
                 isOn ? "Started" : "Stopped", nowString().c_str(),
                 (debugMode ? "True" : "False"));
-
   String data = "text=";
-  data += urlencode("Pump_");
   data += urlencode(WiFi.hostname());
   data += urlencode(isOn ? "_Started" : "_Stopped");
   data += urlencode(debugMode ? "_DEBUG_" : "_");
   data += pumpTotalCounter;
   data += "&desp=";
-  String desp = "Pump";
+  String desp = "";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
   desp += timeString(pumpLastOnAt);
-  desp += ", Total Elapsed: ";
+  desp += ", Total:";
   desp += humanTime(pumpTotalElapsed);
   if (!isOn) {
-    desp += ", Last Elapsed: ";
+    desp += ", Last:";
     desp += humanTime(pumpLastOnElapsed);
   }
-  desp += ", Count: ";
-  desp += pumpTotalCounter;
   fileLog(desp);
-  desp += ", Next at: ";
+  desp += ", Next:";
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
-  desp += ", IP: ";
+  desp += ", IP:";
   desp += WiFi.localIP().toString();
   //   desp.replace(", ", "\n");
   data += urlencode(desp);
