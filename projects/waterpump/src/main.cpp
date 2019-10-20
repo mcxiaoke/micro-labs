@@ -1,4 +1,4 @@
-//#define DEBUG_MODE 1
+#define DEBUG_MODE 1
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
@@ -35,23 +35,30 @@ const char* STATUS_FILE PROGMEM = "/file/status.json";
 int ledPin = 2;    // d4 2
 int pumpPin = D2;  // d2 io4
 
-unsigned long runInterval;       // ms
-unsigned long runDuration;       // ms
-unsigned long updateInterval;    // ms
-unsigned long watchDogInterval;  // ms
-unsigned long wifiInterval;      // ms
-unsigned long ntpInterval;       // ms
+typedef struct {
+  bool globalSwitchOn;
+  unsigned long runInterval;       // ms
+  unsigned long runDuration;       // ms
+  unsigned long updateInterval;    // ms
+  unsigned long watchDogInterval;  // ms
+  unsigned long wifiInterval;      // ms
+  unsigned long ntpInterval;       // ms
+} Config;
+
+typedef struct {
+  unsigned long lastOnAt;
+  unsigned long lastOffAt;
+  unsigned long lastOnElapsed;
+  unsigned int totalCounter;
+  unsigned long totalElapsed;
+  unsigned long startedMs;
+} Status;
+
+Config config = {true, 0};
+Status status = {0};
 
 bool wifiInitialized = false;
-bool globalSwitchOn = true;
 unsigned long progressPrintMs;
-unsigned long pumpStartedMs = 0;
-
-unsigned long pumpLastOnAt = 0;
-unsigned long pumpLastOffAt = 0;
-unsigned long pumpLastOnElapsed = 0;
-unsigned int pumpTotalCounter = 0;
-unsigned long pumpTotalElapsed = 0;
 
 int runTimerId, wifiTimerId, watchdogTimerId;
 
@@ -119,7 +126,7 @@ void fileLog(const String& text, bool appendDate) {
   }
   message += text;
   message += " [";
-  message += globalSwitchOn ? "On" : "Off";
+  message += config.globalSwitchOn ? "On" : "Off";
   message += "]";
   writeLog(PUMP_LOG_FILE, message);
   //   if (c) {
@@ -146,9 +153,9 @@ void loadConfig() {
   if (error) {
     LOGN(F("[Config] Failed to load json config."));
   } else {
-    globalSwitchOn = doc["switch"] | true;
-    pumpLastOnAt = doc["lastAt2"] | 0;
-    pumpTotalElapsed = doc["totalElapsed"] | 0;
+    config.globalSwitchOn = doc["switch"] | true;
+    status.lastOnAt = doc["lastAt2"] | 0;
+    status.totalElapsed = doc["totalElapsed"] | 0;
   }
   LOGN(F("[Config] loadConfig: "));
   serializeJsonPretty(doc, Serial);
@@ -245,7 +252,7 @@ void handleRoot(AsyncWebServerRequest* req) {
 }
 
 void handlePump0(bool turnOn) {
-  if (!globalSwitchOn) {
+  if (!config.globalSwitchOn) {
     LOG(F("[Pump] global switch is off, ignore on."));
     return;
   }
@@ -259,21 +266,21 @@ void handlePump0(bool turnOn) {
   if (isOn) {
     // will stop
     unsigned long elapsed = 0;
-    if (pumpStartedMs > 0) {
+    if (status.startedMs > 0) {
       // in seconds
-      elapsed = (millis() - pumpStartedMs) / 1000.0;
+      elapsed = (millis() - status.startedMs) / 1000.0;
     }
     LOG(", Elapsed: ");
     LOG(elapsed);
     LOG("s");
-    pumpStartedMs = 0;
-    pumpLastOffAt = now();
-    pumpLastOnElapsed = elapsed;
+    status.startedMs = 0;
+    status.lastOffAt = now();
+    status.lastOnElapsed = elapsed;
   } else {
     // will start
-    pumpStartedMs = millis();
-    pumpLastOnAt = now();
-    pumpLastOnElapsed = 0;
+    status.startedMs = millis();
+    status.lastOnAt = now();
+    status.lastOnElapsed = 0;
   }
   LOGN();
   digitalWrite(pumpPin, turnOn ? HIGH : LOW);
@@ -281,12 +288,13 @@ void handlePump0(bool turnOn) {
 }
 
 void pumpWatchDog() {
-  bool status = digitalRead(pumpPin);
+  bool isOn = digitalRead(pumpPin) == 1;
   LOGF("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
-       timeString(pumpLastOnAt).c_str(), timeString().c_str(),
-       status == 1 ? "On" : "Off");
+       timeString(status.lastOnAt).c_str(), timeString().c_str(),
+       isOn ? "On" : "Off");
   showESP();
-  if (pumpStartedMs > 0 && millis() - pumpStartedMs > runDuration) {
+  if (status.startedMs > 0 &&
+      millis() - status.startedMs > config.runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
       handlePump0(false);
       LOGN(F("[Pump] Stopped by watchdog."));
@@ -298,7 +306,7 @@ void pumpWatchDog() {
 void startPump() {
   //   LOGN("[Pump] startPump at " + nowString());
   handlePump0(true);
-  timer.setTimeout(runDuration, stopPump);
+  timer.setTimeout(config.runDuration, stopPump);
 }
 void stopPump() {
   //   LOGN("[Pump] stopPump at " + nowString());
@@ -328,9 +336,9 @@ void handleSwitch(AsyncWebServerRequest* req) {
   }
   String actionStr = req->arg("action");
   bool action = actionStr == "on";
-  bool isOn = globalSwitchOn;
+  bool isOn = config.globalSwitchOn;
   LOGF("[Server] Switch actionStr=%s, isOn=%d\n", actionStr.c_str(), isOn);
-  globalSwitchOn = action;
+  config.globalSwitchOn = action;
   req->redirect("/");
   saveStatus();
 }
@@ -440,18 +448,18 @@ String getStatusJson(bool pretty) {
   doc["ip"] = WiFi.localIP().toString();
   //   doc["mac"] = WiFi.macAddress();
   doc["on"] = digitalRead(pumpPin) == HIGH;
-  doc["lastElapsed"] = pumpLastOnElapsed;
-  doc["totalElapsed"] = pumpTotalElapsed;
+  doc["lastElapsed"] = status.lastOnElapsed;
+  doc["totalElapsed"] = status.totalElapsed;
   // timer or manual last run at
-  doc["lastAt2"] = pumpLastOnAt;
+  doc["lastAt2"] = status.lastOnAt;
   // timer task last run at
   doc["lastAt"] = now() - timer.getElapsed(runTimerId) / 1000;
   doc["nextAt"] = now() + timer.getRemain(runTimerId) / 1000;
-  doc["interval"] = runInterval;
-  doc["duration"] = runDuration;
-  doc["wifiPeriod"] = wifiInterval;
-  doc["updatePeriod"] = updateInterval;
-  doc["switch"] = globalSwitchOn;
+  doc["interval"] = config.runInterval;
+  doc["duration"] = config.runDuration;
+  doc["wifiPeriod"] = config.wifiInterval;
+  doc["updatePeriod"] = config.updateInterval;
+  doc["switch"] = config.globalSwitchOn;
   doc["stack"] = ESP.getFreeContStack();
   doc["heap"] = ESP.getFreeHeap();
 
@@ -469,7 +477,7 @@ String getStatusJson(bool pretty) {
 }
 String getStatusText() {
   String desp = "Global=";
-  desp += globalSwitchOn ? "On" : "Off";
+  desp += config.globalSwitchOn ? "On" : "Off";
   desp += ("\nIP=");
   desp += (WiFi.localIP().toString());
   desp += ("\nSSID=");
@@ -481,19 +489,19 @@ String getStatusText() {
   desp += ("\nUpTime=");
   desp += humanTimeMs(millis());
   desp += ("\nlastRunAt2=");
-  desp += (dateTimeString(pumpLastOnAt));
+  desp += (dateTimeString(status.lastOnAt));
   desp += ("\nlastRunAt=");
   desp += (dateTimeString(now() - timer.getElapsed(runTimerId) / 1000));
   desp += ("\nnextRunAt=");
   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
   desp += ("\nlastOnElapsed=");
-  desp += humanTime(pumpLastOnElapsed);
+  desp += humanTime(status.lastOnElapsed);
   desp += ("\ntotalElapsed=");
-  desp += humanTime(pumpTotalElapsed);
+  desp += humanTime(status.totalElapsed);
   desp += ("\nrunInterval=");
-  desp += humanTimeMs(runInterval);
+  desp += humanTimeMs(config.runInterval);
   desp += ("\nrunDuration=");
-  desp += humanTimeMs(runDuration);
+  desp += humanTimeMs(config.runDuration);
   desp += "\nStack=";
   desp += ESP.getFreeContStack();
   desp += "\nHeap=";
@@ -732,32 +740,33 @@ void setupData() {
   bool debugMode = false;
 #ifdef DEBUG_MODE
   debugMode = true;
-  runInterval = 3 * 60 * 1000L;        // 3min
-  runDuration = 15 * 1000L;            // 15s
-  updateInterval = 5 * 60 * 1000L;     // 5min
-  watchDogInterval = runDuration / 2;  // 7s;
-  ntpInterval = 8 * 60 * 1000L;        // 8min
-  wifiInterval = 2 * 60 * 1000L;       // 2min
+  config.runInterval = 3 * 60 * 1000L;               // 3min
+  config.runDuration = 15 * 1000L;                   // 15s
+  config.updateInterval = 5 * 60 * 1000L;            // 5min
+  config.watchDogInterval = config.runDuration / 2;  // 7s;
+  config.ntpInterval = 8 * 60 * 1000L;               // 8min
+  config.wifiInterval = 2 * 60 * 1000L;              // 2min
 #else
   debugMode = false;
-  runInterval = 8 * 3600 * 1000L;      // 8 * 3 = 24 hours
-  runDuration = 20 * 1000L;            // 60/3=20 seconds
-  updateInterval = 4 * 3600 * 1000L;   // 4hours
-  watchDogInterval = runDuration / 2;  // 10s
-  ntpInterval = 2 * 3600 * 1000L;      // 2 hours
-  wifiInterval = 30 * 60 * 1000L;      // 30min
+  config.runInterval = 8 * 3600 * 1000L;             // 8 * 3 = 24 hours
+  config.runDuration = 20 * 1000L;                   // 60/3=20 seconds
+  config.updateInterval = 4 * 3600 * 1000L;          // 4hours
+  config.watchDogInterval = config.runDuration / 2;  // 10s
+  config.ntpInterval = 2 * 3600 * 1000L;             // 2 hours
+  config.wifiInterval = 30 * 60 * 1000L;             // 30min
 #endif
   LOGF("[System] setupData, debug=%s\n", debugMode ? "True" : "False");
 }
 
 void setupTimers() {
   LOGN(F("[System] Setup timers."));
-  setSyncInterval(ntpInterval / 1000);  // in seconds
+  setSyncInterval(config.ntpInterval / 1000);  // in seconds
   setSyncProvider(ntpSync);
   //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
-  wifiTimerId = timer.setInterval(wifiInterval, checkWiFi);  // in milliseconds
-  runTimerId = timer.setInterval(runInterval, startPump);
-  watchdogTimerId = timer.setInterval(watchDogInterval, pumpWatchDog);
+  wifiTimerId =
+      timer.setInterval(config.wifiInterval, checkWiFi);  // in milliseconds
+  runTimerId = timer.setInterval(config.runInterval, startPump);
+  watchdogTimerId = timer.setInterval(config.watchDogInterval, pumpWatchDog);
 }
 
 void setup() {
@@ -799,11 +808,11 @@ void pumpReport() {
   //   showESP();
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (isOn) {
-    pumpTotalCounter++;
+    status.totalCounter++;
   } else {
-    pumpTotalElapsed += pumpLastOnElapsed;
+    status.totalElapsed += status.lastOnElapsed;
     LOGN("[Server] Pump is scheduled at " +
-         dateTimeString(now() + runInterval / 1000));
+         dateTimeString(now() + config.runInterval / 1000));
   }
   bool debugMode = false;
 #ifdef DEBUG_MODE
@@ -816,17 +825,17 @@ void pumpReport() {
   data += urlencode(WiFi.hostname());
   data += urlencode(isOn ? "_Started" : "_Stopped");
   data += urlencode(debugMode ? "_DEBUG_" : "_");
-  data += pumpTotalCounter;
+  data += status.totalCounter;
   data += "&desp=";
   String desp = "";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
-  desp += timeString(pumpLastOnAt);
+  desp += timeString(status.lastOnAt);
   desp += ", Total:";
-  desp += humanTime(pumpTotalElapsed);
+  desp += humanTime(status.totalElapsed);
   if (!isOn) {
     desp += ", Last:";
-    desp += humanTime(pumpLastOnElapsed);
+    desp += humanTime(status.lastOnElapsed);
   }
   fileLog(desp);
   desp += ", Next:";
