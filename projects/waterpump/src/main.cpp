@@ -1,4 +1,4 @@
-#define DEBUG_MODE 1
+//#define DEBUG_MODE 1
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
@@ -102,8 +102,8 @@ NTPClient ntp(ntpUDP, ntpServer, 0, 60 * 60 * 1000L);
 AsyncWebServer server(80);
 
 void showESP() {
-  LOGF("[System] Free Stack: %d, Free Heap: %d\n",
-                ESP.getFreeContStack(), ESP.getFreeHeap());
+  LOGF("[System] Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
+       ESP.getFreeHeap());
 }
 
 void fileLog(const String& text) {
@@ -229,14 +229,12 @@ void handleNotFound(AsyncWebServerRequest* request) {
 
 void showPumpTaskInfo() {
   LOGF("[Pump] Now: %s\n", nowString().c_str());
-  LOGF(
-      "[Pump] Last: %s, elapsed %s\n",
-      dateTimeString(now() - timer.getElapsed(runTimerId) / 1000).c_str(),
-      humanTimeMs(timer.getElapsed(runTimerId)).c_str());
-  LOGF(
-      "[Pump] Next: %s, remain %s\n",
-      dateTimeString(now() + timer.getRemain(runTimerId) / 1000).c_str(),
-      humanTimeMs(timer.getRemain(runTimerId)).c_str());
+  LOGF("[Pump] Last: %s, elapsed %s\n",
+       dateTimeString(now() - timer.getElapsed(runTimerId) / 1000).c_str(),
+       humanTimeMs(timer.getElapsed(runTimerId)).c_str());
+  LOGF("[Pump] Next: %s, remain %s\n",
+       dateTimeString(now() + timer.getRemain(runTimerId) / 1000).c_str(),
+       humanTimeMs(timer.getRemain(runTimerId)).c_str());
 }
 
 void handleRoot(AsyncWebServerRequest* req) {
@@ -285,8 +283,8 @@ void handlePump0(bool turnOn) {
 void pumpWatchDog() {
   bool status = digitalRead(pumpPin);
   LOGF("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
-                timeString(pumpLastOnAt).c_str(), timeString().c_str(),
-                status == 1 ? "On" : "Off");
+       timeString(pumpLastOnAt).c_str(), timeString().c_str(),
+       status == 1 ? "On" : "Off");
   showESP();
   if (pumpStartedMs > 0 && millis() - pumpStartedMs > runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
@@ -331,8 +329,7 @@ void handleSwitch(AsyncWebServerRequest* req) {
   String actionStr = req->arg("action");
   bool action = actionStr == "on";
   bool isOn = globalSwitchOn;
-  LOGF("[Server] Switch actionStr=%s, isOn=%d\n", actionStr.c_str(),
-                isOn);
+  LOGF("[Server] Switch actionStr=%s, isOn=%d\n", actionStr.c_str(), isOn);
   globalSwitchOn = action;
   req->redirect("/");
   saveStatus();
@@ -377,8 +374,7 @@ void handleUpload(AsyncWebServerRequest* request,
       request->_tempFile.write(data, len);
     }
     if (final) {
-      LOGF("[Server] UploadEnd: %s (%u)\n", filename.c_str(),
-                    index + len);
+      LOGF("[Server] UploadEnd: %s (%u)\n", filename.c_str(), index + len);
       request->_tempFile.close();
     }
   }
@@ -410,7 +406,7 @@ void handleRemoteEditFile(AsyncWebServerRequest* req) {
   size_t hc = req->headers();
   for (size_t i = 0; i < hc; i++) {
     LOGF("[Header] %s : %s\n", req->headerName(i).c_str(),
-                  req->header(i).c_str());
+         req->header(i).c_str());
   }
   AsyncWebParameter* path = req->getParam("file-path", true);
   AsyncWebParameter* data = req->getParam("file-data", true);
@@ -544,7 +540,7 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
   } else {
     if (progressPrintMs == 0 || millis() - progressPrintMs > 500) {
       LOGF("[OTA] Upload progress: %d%%\n",
-                    (Update.progress() * 100) / Update.size());
+           (Update.progress() * 100) / Update.size());
       progressPrintMs = millis();
     }
   }
@@ -615,7 +611,7 @@ void setupServer() {
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest* request) {
     request->send(200, "text/plain", getStatusText());
   });
-  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), "*");
   DefaultHeaders::Instance().addHeader("Server", WiFi.hostname());
 #ifdef DEBUG_MODE
   DefaultHeaders::Instance().addHeader("DebugMode", "True");
@@ -718,8 +714,7 @@ String listFiles() {
   LOGN(F("[System] SPIFFS Files:"));
   Dir dir = SPIFFS.openDir("/");
   while (dir.next()) {
-    LOGF("[File] %s (%d bytes)\n", dir.fileName().c_str(),
-                  dir.fileSize());
+    LOGF("[File] %s (%d bytes)\n", dir.fileName().c_str(), dir.fileSize());
     output += dir.fileName();
     // output += " (";
     // output += dir.fileSize();
@@ -808,15 +803,15 @@ void pumpReport() {
   } else {
     pumpTotalElapsed += pumpLastOnElapsed;
     LOGN("[Server] Pump is scheduled at " +
-                   dateTimeString(now() + runInterval / 1000));
+         dateTimeString(now() + runInterval / 1000));
   }
   bool debugMode = false;
 #ifdef DEBUG_MODE
   debugMode = true;
 #endif
   LOGF("[Report] Pump is %s at %s debugMode: %s\n",
-                isOn ? "Started" : "Stopped", nowString().c_str(),
-                (debugMode ? "True" : "False"));
+       isOn ? "Started" : "Stopped", nowString().c_str(),
+       (debugMode ? "True" : "False"));
   String data = "text=";
   data += urlencode(WiFi.hostname());
   data += urlencode(isOn ? "_Started" : "_Stopped");
@@ -847,7 +842,7 @@ void pumpReport() {
   httpsPost(reportUrl, data);
   data = "";
   LOGF("[Report] %s Pump action report is sent to server. (%d)\n",
-                WiFi.hostname().c_str(), pumpTotalCounter);
+       WiFi.hostname().c_str(), pumpTotalCounter);
   showESP();
 #endif
 }
