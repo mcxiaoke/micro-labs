@@ -9,16 +9,12 @@
 #include <ESPAsyncWebServer.h>
 #include <FS.h>
 #include <NTPClient.h>
-#include <TimeLib.h>
 #include <Updater.h>
-#include <time.h>
-// #include <WebSerial.h>
 #include <ArduinoJson.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
 // #include <user_interface.h>
-
 #include "common/config.h"
 #include "common/data.h"
 #include "common/internal.h"
@@ -71,8 +67,6 @@ void pumpReport();
 String getStatusJson(bool);
 String getStatusText();
 String listFiles();
-void webSerialRecv(uint8_t* data, size_t len);
-void handleWebSerialCmd(const String& cmd);
 void showESP();
 void fileLog(const String& text, bool);
 void fileLog(const String& text);
@@ -86,15 +80,20 @@ void handlePump0(bool action);
 void startPump();
 void stopPump();
 void pumpWatchDog();
-void handleClearLogs(AsyncWebServerRequest* req);
-void handleResetBoard(AsyncWebServerRequest* req);
 
-void handleRemoteDeleteFile(AsyncWebServerRequest* req);
-void handleRemoteEditFile(AsyncWebServerRequest* req);
-void handleRemoteGetFiles(AsyncWebServerRequest* req);
-void handleRemoteGetLogs(AsyncWebServerRequest* req);
-void handleRemoteGetStatusJson(AsyncWebServerRequest* req);
-void handleRemoteGetStatusText(AsyncWebServerRequest* req);
+void apiStart(AsyncWebServerRequest* req);
+void apiStop(AsyncWebServerRequest* req);
+void apiOn(AsyncWebServerRequest* req);
+void apiOff(AsyncWebServerRequest* req);
+void apiReboot(AsyncWebServerRequest* req);
+void apiDeleteFile(AsyncWebServerRequest* req);
+void apiClearLogs(AsyncWebServerRequest* req);
+
+void apiGetStatus(AsyncWebServerRequest* req);
+void apiGetLogs(AsyncWebServerRequest* req);
+void apiGetFiles(AsyncWebServerRequest* req);
+void apiViewFile(AsyncWebServerRequest* req);
+
 void handleOTARedirect(AsyncWebServerRequest* req);
 void handleOTAUpdate(AsyncWebServerRequest*,
                      const String&,
@@ -284,6 +283,7 @@ void handlePump0(bool turnOn) {
   }
   LOGN();
   digitalWrite(pumpPin, turnOn ? HIGH : LOW);
+  saveStatus();
   timer.setTimeout(200L, pumpReport);
 }
 
@@ -311,132 +311,6 @@ void startPump() {
 void stopPump() {
   //   LOGN("[Pump] stopPump at " + nowString());
   handlePump0(false);
-}
-
-void handlePump(AsyncWebServerRequest* req) {
-  LOG(F("[Server] handlePump url="));
-  LOG(req->url());
-  LOGN();
-  if (!req->hasArg("action")) {
-    req->redirect("/");
-    return;
-  }
-  String actionStr = req->arg("action");
-  bool action = actionStr == "on";
-  bool isOn = digitalRead(pumpPin) == HIGH;
-  LOGF("[Pump] Pump actionStr=%s, isOn=%d\n", actionStr.c_str(), isOn);
-  handlePump0(action);
-  req->redirect("/");
-}
-
-void handleSwitch(AsyncWebServerRequest* req) {
-  if (!req->hasArg("action")) {
-    req->redirect("/");
-    return;
-  }
-  String actionStr = req->arg("action");
-  bool action = actionStr == "on";
-  bool isOn = config.globalSwitchOn;
-  LOGF("[Server] Switch actionStr=%s, isOn=%d\n", actionStr.c_str(), isOn);
-  config.globalSwitchOn = action;
-  req->redirect("/");
-  saveStatus();
-}
-
-void handleClearLogs(AsyncWebServerRequest* req) {
-  bool removed = SPIFFS.remove(PUMP_LOG_FILE);
-  LOG(F("[Server] Pump logs cleared, result: "));
-  LOGN(removed ? "success" : "fail");
-  req->send(200);
-  File f = SPIFFS.open(PUMP_LOG_FILE, "w");
-  if (f) {
-    f.write((uint8_t)0x00);
-    f.close();
-  }
-}
-
-void handleResetBoard(AsyncWebServerRequest* req) {
-  LOG(F("[Server] Pump is rebooting..."));
-  req->send(200);
-  server.end();
-  ESP.restart();
-}
-
-void handleUpload(AsyncWebServerRequest* request,
-                  const String& filename,
-                  size_t index,
-                  uint8_t* data,
-                  size_t len,
-                  bool final) {
-  LOG("[Server] handleUpload url=");
-  LOG(request->url());
-  LOG(", tempFile=");
-  LOGN(request->_tempFile.fullName());
-  if (!index) {
-    LOGF("[Server] UploadStart: %s\n", filename.c_str());
-    LOGF("%s", (const char*)data);
-    request->_tempFile = SPIFFS.open(filename, "w");
-  }
-  if (request->_tempFile) {
-    if (len) {
-      request->_tempFile.write(data, len);
-    }
-    if (final) {
-      LOGF("[Server] UploadEnd: %s (%u)\n", filename.c_str(), index + len);
-      request->_tempFile.close();
-    }
-  }
-}
-
-void handleRemoteDeleteFile(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteDeleteFile"));
-  String output = "";
-  if (req->hasParam("file_path", true)) {
-    AsyncWebParameter* path = req->getParam("file_path", true);
-    String filePath = path->value();
-    if (SPIFFS.remove(filePath)) {
-      output = "File:";
-      output += filePath;
-      output += " is deleted.";
-      req->send(200, "text/plain", output);
-    } else {
-      output = "Failed to delete file:";
-      output += filePath;
-      req->send(404, "text/plain", output);
-    }
-  } else {
-    req->send(400, "text/plain", "Invalid Parameters.");
-  }
-}
-
-void handleRemoteEditFile(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteEditFile"));
-  size_t hc = req->headers();
-  for (size_t i = 0; i < hc; i++) {
-    LOGF("[Header] %s : %s\n", req->headerName(i).c_str(),
-         req->header(i).c_str());
-  }
-  AsyncWebParameter* path = req->getParam("file-path", true);
-  AsyncWebParameter* data = req->getParam("file-data", true);
-  LOGF("file-path=");
-  LOGN(path->value());
-  LOGF("file-data=");
-  LOGN(data->value());
-  req->send(200, "text/plain", "ok");
-}
-
-void handleRemoteGetFiles(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteGetFiles"));
-  String content = listFiles();
-  req->send(200, "text/plain", content);
-}
-void handleRemoteGetLogs(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteGetLogs"));
-  if (SPIFFS.exists(PUMP_LOG_FILE)) {
-    req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
-  } else {
-    req->send(200, "text/plain", "");
-  }
 }
 
 String getStatusJson(bool pretty) {
@@ -570,6 +444,127 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
   }
 }
 
+//////////
+void apiStart(AsyncWebServerRequest* req) {
+  startPump();
+  req->redirect("/");
+}
+void apiStop(AsyncWebServerRequest* req) {
+  stopPump();
+  req->redirect("/");
+}
+void apiOn(AsyncWebServerRequest* req) {
+  config.globalSwitchOn = true;
+  saveStatus();
+  req->redirect("/");
+}
+void apiOff(AsyncWebServerRequest* req) {
+  config.globalSwitchOn = false;
+  saveStatus();
+  req->redirect("/");
+}
+void apiReboot(AsyncWebServerRequest* req) {
+  LOG(F("[Server] Pump is rebooting..."));
+  req->redirect("/");
+  server.end();
+  ESP.restart();
+}
+
+void apiDeleteFile(AsyncWebServerRequest* req) {
+  LOGN(F("[Server] handleRemoteDeleteFile"));
+  String output = "";
+  if (req->hasParam("file_path", true)) {
+    AsyncWebParameter* path = req->getParam("file_path", true);
+    String filePath = path->value();
+    if (SPIFFS.remove(filePath)) {
+      output = "File:";
+      output += filePath;
+      output += " is deleted.";
+      req->send(200, "text/plain", output);
+    } else {
+      output = "Failed to delete file:";
+      output += filePath;
+      req->send(404, "text/plain", output);
+    }
+  } else {
+    req->send(400, "text/plain", "Invalid Parameters.");
+  }
+}
+
+void apiClearLogs(AsyncWebServerRequest* req) {
+  bool removed = SPIFFS.remove(PUMP_LOG_FILE);
+  LOG(F("[Server] Pump logs cleared, result: "));
+  LOGN(removed ? "success" : "fail");
+  File f = SPIFFS.open(PUMP_LOG_FILE, "w");
+  if (f) {
+    f.write((uint8_t)0x00);
+    f.close();
+  }
+  req->send(200);
+}
+
+void apiGetStatus(AsyncWebServerRequest* req) {
+  LOG(F("[Server] apiGetStatus "));
+  LOGN(req->getHeader("Accept")->toString());
+  bool useJson =
+      String("application/json")
+          .equalsIgnoreCase(req->getHeader("Accept")->value()) ||
+      (req->hasParam("format") &&
+       String("json").equalsIgnoreCase(req->getParam("format")->value()));
+  if (useJson) {
+    req->send(200, F("application/json"), getStatusJson(true));
+  } else {
+    String text = getStatusText();
+    text.replace(", ", "\n");
+    req->send(200, "text/plain", text);
+  }
+}
+void apiGetLogs(AsyncWebServerRequest* req) {
+  LOGN(F("[Server] apiGetLogs"));
+  if (SPIFFS.exists(PUMP_LOG_FILE)) {
+    req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+  } else {
+    req->send(200, "text/plain", "");
+  }
+}
+void apiGetFiles(AsyncWebServerRequest* req) {
+  LOGN(F("[Server] handleRemoteGetFiles"));
+  String content = listFiles();
+  req->send(200, "text/plain", content);
+}
+
+void apiViewFile(AsyncWebServerRequest* req) {
+  LOGN(F("[Server] handleRemoteEditFile"));
+  size_t hc = req->headers();
+  for (size_t i = 0; i < hc; i++) {
+    LOGF("[Header] %s : %s\n", req->headerName(i).c_str(),
+         req->header(i).c_str());
+  }
+  AsyncWebParameter* path = req->getParam("file-path", true);
+  AsyncWebParameter* data = req->getParam("file-data", true);
+  LOGF("file-path=");
+  LOGN(path->value());
+  LOGF("file-data=");
+  LOGN(data->value());
+  req->send(200, "text/plain", "ok");
+}
+//////////
+
+void setupApi() {
+  server.on("/api/reboot", HTTP_POST, apiReboot);
+  server.on("/api/start", HTTP_POST, apiStart);
+  server.on("/api/stop", HTTP_POST, apiStop);
+  server.on("/api/on", HTTP_POST, apiOn);
+  server.on("/api/off", HTTP_POST, apiOff);
+  server.on("/api/clear_logs", HTTP_POST, apiClearLogs);
+  server.on("/api/delete_file", HTTP_POST, apiDeleteFile);
+
+  server.on("/api/files", HTTP_GET, apiGetFiles);
+  server.on("/api/logs", HTTP_GET, apiGetLogs);
+  server.on("/api/view", HTTP_POST, apiViewFile);
+  server.on("/api/status", HTTP_GET, apiGetStatus);
+}
+
 void setupServer() {
   if (MDNS.begin("esp8266")) {  // Start the mDNS responder for esp8266.local
     LOGN(F("[Server] mDNS responder started"));
@@ -587,38 +582,13 @@ void setupServer() {
       .setLastModified(now() - millis() / 1000)
       .setCacheControl("max-age=600")
       .setDefaultFile("index.html");
-  server.on("/j/toggle_pump", HTTP_POST, handlePump);
-  server.on("/j/toggle_switch", HTTP_POST, handleSwitch);
-  server.on("/j/clear_logs", HTTP_POST, handleClearLogs);
-  server.on("/j/reset_board", HTTP_POST, handleResetBoard);
-  server.on("/j/reboot", HTTP_POST, handleResetBoard);
-  server.on("/j/delete_file", HTTP_POST, handleRemoteDeleteFile);
-  server.on("/j/get_files", HTTP_GET, handleRemoteGetFiles);
-  server.on("/j/edit_file", HTTP_POST, handleRemoteEditFile);
-  server.on("/j/get_logs", HTTP_GET, handleRemoteGetLogs);
-  server.on("/j/get_status_json", HTTP_GET, handleRemoteGetStatusJson);
-  server.on("/j/get_status_text", HTTP_GET, handleRemoteGetStatusText);
-  server.on("/ota", HTTP_GET, handleOTARedirect);
   server.on("/update", HTTP_GET, handleOTARedirect);
-  server.on("/ota", HTTP_POST, [](AsyncWebServerRequest* request) {},
-            [](AsyncWebServerRequest* request, const String& filename,
-               size_t index, uint8_t* data, size_t len, bool final) {
-              handleOTAUpdate(request, filename, index, data, len, final);
-            });
   server.on("/update", HTTP_POST, [](AsyncWebServerRequest* request) {},
             [](AsyncWebServerRequest* request, const String& filename,
                size_t index, uint8_t* data, size_t len, bool final) {
               handleOTAUpdate(request, filename, index, data, len, final);
             });
-  server.on("/www/update.html", HTTP_POST,
-            [](AsyncWebServerRequest* request) {},
-            [](AsyncWebServerRequest* request, const String& filename,
-               size_t index, uint8_t* data, size_t len, bool final) {
-              handleOTAUpdate(request, filename, index, data, len, final);
-            });
-  server.on("/status", HTTP_GET, [](AsyncWebServerRequest* request) {
-    request->send(200, "text/plain", getStatusText());
-  });
+  setupApi();
   DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), "*");
   DefaultHeaders::Instance().addHeader("Server", WiFi.hostname());
 #ifdef DEBUG_MODE
@@ -626,36 +596,6 @@ void setupServer() {
 #endif
   server.begin();
   LOGN(F("[Server] HTTP server started"));
-}
-
-void webSerialRecv(uint8_t* data, size_t len) {
-  String s = "";
-  for (size_t i = 0; i < len; i++) {
-    s += char(data[i]);
-  }
-  //   WebLOGN(s);
-  LOG("WebSerial: ");
-  LOGN(s);
-  handleWebSerialCmd(s);
-}
-
-void showHelpMsg() {
-  /***
-WebLOGN("--------------------");
-WebLOGN("Available Commands:");
-WebLOGN("\t/help show this message.");
-WebLOGN("\t/logs show pump file logs");
-WebLOGN("\t/list show spiffs files");
-WebLOGN("\t/wifi show wifi info");
-WebLOGN("\t/connect do wifi reconnect");
-WebLOGN("\t/setio 11 0 set 1/0 for io port 11");
-WebLOGN("\t/reset reboot chip.");
-WebLOGN("--------------------");
-***/
-}
-
-void handleWebSerialCmd(const String& cmd) {
-  showHelpMsg();
 }
 
 void setupNTP() {
