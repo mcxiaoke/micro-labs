@@ -54,7 +54,7 @@ function buildFormDiv(d) {
     var pf = $('<form>')
         .attr('id', 'pump-form')
         .attr('method', 'POST')
-        .attr('action', serverUrl + '/j/toggle_pump?action=' + (d["on"] ? "off" : "on"))
+        .attr('action', serverUrl + '/api/' + (d["on"] ? "stop" : "start"))
         .append(
             $('<button>').attr('id', 'pump_submit').attr('type', 'submit')
                 .text(d["on"] ? "Stop Pump" : "Start Pump")
@@ -63,7 +63,7 @@ function buildFormDiv(d) {
     var sf = $('<form>')
         .attr('id', 'switch-form')
         .attr('method', 'POST')
-        .attr('action', serverUrl + '/j/toggle_switch?action=' + (d["switch"] ? "off" : "on"))
+        .attr('action', serverUrl + '/api/' + (d["switch"] ? "off" : "on"))
         .append(
             $('<button>').attr('id', 'switch_submit').attr('type', 'submit')
                 .text(d["switch"] ? "Switch Off" : "Switch On")
@@ -103,7 +103,7 @@ function buildButtonDiv() {
                     console.log("Clear logs ok.");
                 }
             };
-            xhr.open("POST", serverUrl + "/j/clear_logs");
+            xhr.open("POST", serverUrl + "/api/clear_logs");
             xhr.send();
             return true;
         }
@@ -133,7 +133,7 @@ function buildButtonDiv() {
                     alert('Board will reboot!');
                 }
             };
-            xhr.open("POST", serverUrl + "/j/reset_board");
+            xhr.open("POST", serverUrl + "/api/reboot");
             xhr.send();
             return true;
         }
@@ -185,7 +185,8 @@ function loadData(firstTime) {
             handleError(firstTime);
         }
     };
-    xhr.open("GET", serverUrl + "/j/get_status_json");
+    xhr.open("GET", serverUrl + "/api/status");
+    xhr.setRequestHeader("Accept", "application/json");
     xhr.send();
     return false;
 }

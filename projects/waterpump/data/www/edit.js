@@ -41,7 +41,7 @@ window.addEventListener("DOMContentLoaded", function (e) {
             var fd = new FormData();
             fd.append('file-path', urlPath);
             fd.append('file-data', $('#text').text());
-            xhr.open("POST", serverUrl + "/j/edit_file");
+            xhr.open("POST", serverUrl + "/api/view");
             // xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
             xhr.send(fd);
             return true;

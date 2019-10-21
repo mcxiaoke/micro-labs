@@ -19,7 +19,7 @@ function loadData(e) {
                     }
                     var fd = new FormData();
                     fd.append('file_path', it);
-                    ar.open('POST', serverUrl + '/j/delete_file');
+                    ar.open('POST', serverUrl + '/api/delete_file');
                     ar.send(fd);
                 });
                 var da = $('<button>').text('Download');
@@ -50,7 +50,7 @@ function loadData(e) {
     xhr.onerror = function (e) {
         console.error("Failed: " + e);
     }
-    xhr.open('GET', serverUrl + '/j/get_files');
+    xhr.open('GET', serverUrl + '/api/files');
     xhr.send();
 }
 

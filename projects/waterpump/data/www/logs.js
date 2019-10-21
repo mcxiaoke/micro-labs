@@ -1,6 +1,6 @@
 function loadData() {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', serverUrl + '/j/get_logs');
+    xhr.open('GET', serverUrl + '/api/logs');
     xhr.onload = function () {
         if (xhr.status === 200) {
             var outputText = xhr.responseText.split(/\n/).map((it) => "<p>" + it + "</p>").join("\n");
@@ -35,7 +35,7 @@ window.addEventListener('DOMContentLoaded', (e) => {
                 }
                 loadData();
             };
-            xhr.open("POST", serverUrl + "/j/clear_logs");
+            xhr.open("POST", serverUrl + "/api/clear_logs");
             xhr.send();
             return true;
         }
