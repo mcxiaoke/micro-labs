@@ -1,5 +1,27 @@
 #include "internal.h"
 
+String logFileName() {
+  String fileName = "/file/log-";
+  fileName += dateString();
+  fileName += ".txt";
+  return fileName;
+}
+
+size_t fileLog(const String& text, bool appendDate) {
+  String message = "";
+  if (appendDate) {
+    message += "[";
+    message += timeString();
+    message += "] ";
+  }
+  message += text;
+  String fileName = logFileName();
+  size_t c = writeLog(fileName, message);
+  message = "";
+  fileName = "";
+  return c;
+}
+
 size_t writeLog(const String& path, const String& text) {
   File f = SPIFFS.open(path, "a");
   if (!f) {
@@ -104,7 +126,7 @@ String timeString() {
 String dateString(unsigned long ts) {
   ts += TZ_OFFSET;
   if (ts < TIME_START) {
-    return "N/A";
+    return "NA";
   }
   char buf[16];
   sprintf(buf, "%04d-%02d-%02d", year(ts), month(ts), day(ts));

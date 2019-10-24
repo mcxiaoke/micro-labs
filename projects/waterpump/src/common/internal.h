@@ -7,7 +7,7 @@
 #include <TimeLib.h>
 #include <time.h>
 
-#if DEBUG_MODE
+#ifdef ENABLE_LOGGING
 #define LOG(...) Serial.print(__VA_ARGS__)
 #define LOGN(...) Serial.println(__VA_ARGS__)
 #define LOGF(...) Serial.printf(__VA_ARGS__)
@@ -24,6 +24,8 @@
 const time_t TIME_START = 1500000000L;  // in seconds
 const time_t TZ_OFFSET = 8 * 3600L;     // in seconds
 
+String logFileName();
+size_t fileLog(const String& text, bool appendDate);
 size_t writeLog(const String& path, const String& text);
 String readLog(const String& path);
 int timedRead(Stream& s);

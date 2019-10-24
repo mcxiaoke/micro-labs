@@ -1,5 +1,7 @@
-#define DEBUG_MODE 1
+//#define DEBUG_MODE 1
+#define ENABLE_LOGGING 1
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
@@ -10,7 +12,6 @@
 #include <FS.h>
 #include <NTPClient.h>
 #include <Updater.h>
-#include <ArduinoJson.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
@@ -24,7 +25,6 @@
 // static esp8266::polledTimeout::periodicMs showTimeNow(10000);
 // https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
 
-const char* PUMP_LOG_FILE PROGMEM = "/file/pump.log";
 const char* JSON_CONFIG_FILE PROGMEM = "/file/config.json";
 const char* STATUS_FILE PROGMEM = "/file/status.json";
 
@@ -68,7 +68,6 @@ String getStatusJson(bool);
 String getStatusText();
 String listFiles();
 void showESP();
-void fileLog(const String& text, bool);
 void fileLog(const String& text);
 void loadConfig();
 void showPumpTaskInfo();
@@ -113,24 +112,8 @@ void showESP() {
 }
 
 void fileLog(const String& text) {
+  LOGN(text);
   fileLog(text, true);
-}
-
-void fileLog(const String& text, bool appendDate) {
-  String message = "";
-  if (appendDate) {
-    message += "[";
-    message += nowString();
-    message += "] ";
-  }
-  message += text;
-  message += " [";
-  message += config.globalSwitchOn ? "On" : "Off";
-  message += "]";
-  writeLog(PUMP_LOG_FILE, message);
-  //   if (c) {
-  //     LOGF("[Log] %u bytes log written to file.\n", c);
-  //   }
 }
 
 void saveStatus() {
@@ -218,9 +201,10 @@ void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
   msg += WiFi.SSID();
   msg += " IP: ";
   msg += WiFi.localIP().toString();
-  LOGN(msg);
   if (wifiInitialized) {
     fileLog(msg);
+  } else {
+    LOGN(msg);
   }
 }
 
@@ -297,7 +281,6 @@ void pumpWatchDog() {
       millis() - status.startedMs > config.runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
       handlePump0(false);
-      LOGN(F("[Pump] Stopped by watchdog."));
       fileLog(F("[Pump] Stopped by watchdog."));
     }
   }
@@ -438,7 +421,6 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
     } else {
       setOTAUpdated();
       fileLog("[OTA] Board firmware update completed.");
-      LOGN(F("[OTA] Update complete, will reboot."));
       ESP.restart();
     }
   }
@@ -492,10 +474,10 @@ void apiDeleteFile(AsyncWebServerRequest* req) {
 }
 
 void apiClearLogs(AsyncWebServerRequest* req) {
-  bool removed = SPIFFS.remove(PUMP_LOG_FILE);
+  bool removed = SPIFFS.remove(logFileName());
   LOG(F("[Server] Pump logs cleared, result: "));
   LOGN(removed ? "success" : "fail");
-  File f = SPIFFS.open(PUMP_LOG_FILE, "w");
+  File f = SPIFFS.open(logFileName(), "w");
   if (f) {
     f.write((uint8_t)0x00);
     f.close();
@@ -521,8 +503,8 @@ void apiGetStatus(AsyncWebServerRequest* req) {
 }
 void apiGetLogs(AsyncWebServerRequest* req) {
   LOGN(F("[Server] apiGetLogs"));
-  if (SPIFFS.exists(PUMP_LOG_FILE)) {
-    req->send(SPIFFS, PUMP_LOG_FILE, "text/plain");
+  if (SPIFFS.exists(logFileName())) {
+    req->send(SPIFFS, logFileName(), "text/plain");
   } else {
     req->send(200, "text/plain", "");
   }
@@ -734,7 +716,7 @@ void setup() {
   setupServer();
   setupTimers();
   saveStatus();
-  fileLog("[System] Board started at " + nowString());
+  fileLog("[System] Board boot on " + nowString());
   showESP();
   LOGN(F("============= SETUP END ============="));
 }
@@ -761,16 +743,10 @@ void pumpReport() {
   LOGF("[Report] Pump is %s at %s debugMode: %s\n",
        isOn ? "Started" : "Stopped", nowString().c_str(),
        (debugMode ? "True" : "False"));
-  String data = "text=";
-  data += urlencode(WiFi.hostname());
-  data += urlencode(isOn ? "_Started" : "_Stopped");
-  data += urlencode(debugMode ? "_DEBUG_" : "_");
-  data += status.totalCounter;
-  data += "&desp=";
   String desp = "";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
-  desp += timeString(status.lastOnAt);
+  desp += timeString(isOn ? status.lastOnAt : status.lastOffAt);
   desp += ", Total:";
   desp += humanTime(status.totalElapsed);
   if (!isOn) {
@@ -778,20 +754,23 @@ void pumpReport() {
     desp += humanTime(status.lastOnElapsed);
   }
   fileLog(desp);
-  desp += ", Next:";
-  desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
-  desp += ", IP:";
-  desp += WiFi.localIP().toString();
-  //   desp.replace(", ", "\n");
-  data += urlencode(desp);
+  //   desp += ", Next:";
+  //   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
+  //   desp += ", IP:";
+  //   desp += WiFi.localIP().toString();
   desp = "";
   saveStatus();
 #ifndef DEBUG_MODE
-  showESP();
-  httpsPost(reportUrl, data);
-  data = "";
-  LOGF("[Report] %s Pump action report is sent to server. (%d)\n",
-       WiFi.hostname().c_str(), pumpTotalCounter);
+  //   String data = "text=";
+  //   data += urlencode(F("Pump"));
+  //   data += urlencode(isOn ? F("_Started") : F("_Stopped"));
+  //   data += F("&desp=");
+  //   data += urlencode(isOn ? F(" Started at ") : F(" Stopped at "));
+  //   data += urlencode(timeString(isOn ? status.lastOnAt : status.lastOffAt));
+  //   httpsPost(reportUrl, data);
+  //   data = "";
+  //   LOGF("[Report] %s Pump action report is sent to server. \n",
+  //        WiFi.hostname().c_str());
   showESP();
 #endif
 }
