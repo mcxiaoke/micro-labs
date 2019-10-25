@@ -22,9 +22,6 @@
 #include "common/net.h"
 #include "libs/SimpleTimer.h"
 
-// static esp8266::polledTimeout::periodicMs showTimeNow(10000);
-// https://randomnerdtutorials.com/esp8266-pinout-reference-gpios/
-
 const char* JSON_CONFIG_FILE PROGMEM = "/file/config.json";
 const char* STATUS_FILE PROGMEM = "/file/status.json";
 
@@ -85,6 +82,7 @@ void apiStop(AsyncWebServerRequest* req);
 void apiOn(AsyncWebServerRequest* req);
 void apiOff(AsyncWebServerRequest* req);
 void apiReboot(AsyncWebServerRequest* req);
+void apiSetTimer(AsyncWebServerRequest* req);
 void apiDeleteFile(AsyncWebServerRequest* req);
 void apiClearLogs(AsyncWebServerRequest* req);
 
@@ -395,7 +393,7 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
     // if filename includes spiffs, update the spiffs partition
     int cmd = (filename.indexOf("spiffs") > -1) ? U_SPIFFS : U_FLASH;
     Update.runAsync(true);
-    if (!Update.begin(conentLength, cmd)) {
+    if (!Update.begin(conentLength, cmd, ledPin, LOW)) {
       Update.printError(Serial);
     }
   }
@@ -411,11 +409,8 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
   }
 
   if (final) {
-    AsyncWebServerResponse* response = request->beginResponse(
-        302, "text/plain", F("[OTA] Please wait while the device reboots"));
-    response->addHeader("Refresh", "20");
-    response->addHeader("Location", "/");
-    request->send(response);
+    request->send(200, "text/plain", "ok");
+    delay(1000);
     if (!Update.end(true)) {
       Update.printError(Serial);
     } else {
@@ -429,6 +424,7 @@ void handleOTAUpdate(AsyncWebServerRequest* request,
 //////////
 void apiStart(AsyncWebServerRequest* req) {
   startPump();
+//   req->send(200, "text/plain", "ok");
   req->redirect("/");
 }
 void apiStop(AsyncWebServerRequest* req) {
@@ -450,6 +446,15 @@ void apiReboot(AsyncWebServerRequest* req) {
   req->redirect("/");
   server.end();
   ESP.restart();
+}
+
+void apiSetTimer(AsyncWebServerRequest* req) {
+  LOG(F("[Server] Set Timer"));
+  if (runTimerId > -1) {
+    timer.deleteTimer(runTimerId);
+  }
+  runTimerId = timer.setInterval(config.runInterval, startPump);
+  req->redirect("/");
 }
 
 void apiDeleteFile(AsyncWebServerRequest* req) {
@@ -482,7 +487,7 @@ void apiClearLogs(AsyncWebServerRequest* req) {
     f.write((uint8_t)0x00);
     f.close();
   }
-  req->send(200);
+  req->redirect("/");
 }
 
 void apiGetStatus(AsyncWebServerRequest* req) {
@@ -534,6 +539,7 @@ void apiViewFile(AsyncWebServerRequest* req) {
 
 void setupApi() {
   server.on("/api/reboot", HTTP_POST, apiReboot);
+  server.on("/api/timer", HTTP_POST, apiSetTimer);
   server.on("/api/start", HTTP_POST, apiStart);
   server.on("/api/stop", HTTP_POST, apiStop);
   server.on("/api/on", HTTP_POST, apiOn);

@@ -1,21 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>OTA Update</title>
+        <link rel="stylesheet" type="text/css" href="main.css" />
+        <script src="config.js"></script>
+    </head>
 
-<head>
-    <meta charset="UTF-8">
-    <title>OTA Update</title>
-    <link rel="stylesheet" type="text/css" href="main.css" />
-</head>
+    <body>
+        <div class="content">
+            <h1>OTA Update</h1>
+            <p>
+                Select firmware or spiffs binay file.
+            </p>
+            <p>
+                <span>Server: </span
+                ><input
+                    type="text"
+                    name="server"
+                    id="server"
+                    placeholder="http://192.168.1.135"
+                /><span> [Optional]</span>
+            </p>
+            <form
+                id="ota-form"
+                name="ota-form"
+                method="POST"
+                action="/update"
+                enctype="multipart/form-data"
+            >
+                <input type="file" name="firmware" id="firmware" />
+                <input type="submit" id="submit" value="Update" disabled />
+            </form>
+            <p class="output" id="progress" style="color: red;"></p>
+        </div>
+        <script>
+            window.addEventListener("DOMContentLoaded", e => {
+                let btnSubmit = document.getElementById("submit");
+                let fileInput = document.getElementById("firmware");
+                fileInput.addEventListener("change", e => {
+                    if (e.target.files.length > 0) {
+                        console.log("input file = " + e.target.files[0].name);
+                    } else {
+                        console.log("input file: no file");
+                    }
+                    btnSubmit.disabled = e.target.files.length < 1;
+                });
+                let form = document.getElementById("ota-form");
+                form.addEventListener("submit", e => {
+                    e.preventDefault();
+                    let pg = document.getElementById("progress");
+                    let ip = document.getElementById("server");
+                    let url = serverUrl || ip.value || "";
+                    console.log("submit, server=" + ip.value);
+                    xhr = new XMLHttpRequest();
+                    xhr.onload = function() {
+                        console.log("xhr onload " + xhr.status);
+                        if (xhr.status < 400) {
+                            console.log("Board firmware updated!");
+                            alert("Board firmware updated!");
+                        }
+                    };
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            let pct = Math.ceil((e.loaded / e.total) * 100);
+                            if (e.loaded < e.total) {
+                                pg.textContent =
+                                    "Uploading Progress: " + pct + "%";
+                            } else {
+                                pg.textContent = "Upload Completed!";
+                                location.href = "/";
+                            }
+                            console.log(
+                                "Uploading: " + e.loaded + " / " + e.total
+                            );
+                        }
+                    };
+                    xhr.onload = e => {
+                        pg.textContent = "Upload Completed!";
+                    };
+                    let fd = new FormData(form);
+                    xhr.open("POST", url + form.getAttribute("action"));
+                    xhr.send(fd);
 
-<body>
-    <div class="content">
-        <h1>OTA Update</h1>
-        <p>Please select and upload your new firmware or spiffs binay file.</p>
-        <form id="ota-form" method='POST' action="/update" enctype='multipart/form-data'>
-            <input type='file' name='firmware' id="firmware">
-            <input type='submit' id="submit" value='Update'>
-        </form>
-    </div>
-</body>
-
+                    return false;
+                });
+            });
+        </script>
+    </body>
 </html>
