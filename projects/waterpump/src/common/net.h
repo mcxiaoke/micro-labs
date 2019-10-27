@@ -14,12 +14,12 @@
 #include "Arduino.h"
 #include "internal.h"
 
-String wifiHttpPost(String&, String&, WiFiClient& client);
-String wifiHttpGet(String&, WiFiClient& client);
-String httpPost(String&, String&);
-String httpGet(String&);
-String httpsPost(String&, String&);
-String httpsGet(String&);
+String wifiHttpPost(const String&, const String&, WiFiClient& client);
+String wifiHttpGet(const String&, WiFiClient& client);
+String httpPost(const String&, const String&);
+String httpGet(const String&);
+String httpsPost(const String&, const String&);
+String httpsGet(const String&);
 String getWiFiDisconnectReason(int code);
 
 #endif

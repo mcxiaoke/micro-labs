@@ -1,6 +1,6 @@
 #include "net.h"
 
-String wifiHttpPost(String& url, String& body, WiFiClient& client) {
+String wifiHttpPost(const String& url, const String& body, WiFiClient& client) {
   HTTPClient http;
   if (NET_DEBUG_LOG) {
     LOGF("[HTTP] POST, url: %s\n", url.c_str());
@@ -15,11 +15,10 @@ String wifiHttpPost(String& url, String& body, WiFiClient& client) {
       LOGF("[HTTP] POST, code: %d\n", httpCode);
       // file found at server
       String payload = http.getString();
-    //   LOGF("[HTTP] POST, content: %s\n", payload.c_str());
+      //   LOGF("[HTTP] POST, content: %s\n", payload.c_str());
       return payload;
     } else {
-      LOGF("[HTTP] POST, error: %s\n",
-                    http.errorToString(httpCode).c_str());
+      LOGF("[HTTP] POST, error: %s\n", http.errorToString(httpCode).c_str());
     }
   } else {
     LOGN("[HTTP] POST failed.");
@@ -29,7 +28,7 @@ String wifiHttpPost(String& url, String& body, WiFiClient& client) {
   return "";
 }
 
-String wifiHttpGet(String& url, WiFiClient& client) {
+String wifiHttpGet(const String& url, WiFiClient& client) {
   HTTPClient http;
   LOGF("[HTTP] GET, url: %s\n", url.c_str());
   if (http.begin(client, url)) {  // HTTP
@@ -40,11 +39,10 @@ String wifiHttpGet(String& url, WiFiClient& client) {
       LOGF("[HTTP] GET, code: %d\n", httpCode);
       // file found at server
       String payload = http.getString();
-    //   LOGF("[HTTP] GET, content: %s\n", payload.c_str());
+      //   LOGF("[HTTP] GET, content: %s\n", payload.c_str());
       return payload;
     } else {
-      LOGF("[HTTP] GET, error: %s\n",
-                    http.errorToString(httpCode).c_str());
+      LOGF("[HTTP] GET, error: %s\n", http.errorToString(httpCode).c_str());
     }
   } else {
     LOGN("[HTTP] GET failed.");
@@ -54,23 +52,23 @@ String wifiHttpGet(String& url, WiFiClient& client) {
   return "";
 }
 
-String httpPost(String& url, String& body) {
+String httpPost(const String& url, const String& body) {
   WiFiClient client;
   return wifiHttpPost(url, body, client);
 }
 
-String httpGet(String& url) {
+String httpGet(const String& url) {
   WiFiClient client;
   return wifiHttpGet(url, client);
 }
 
-String httpsPost(String& url, String& body) {
+String httpsPost(const String& url, const String& body) {
   BearSSL::WiFiClientSecure client;
   client.setInsecure();
   return wifiHttpPost(url, body, client);
 }
 
-String httpsGet(String& url) {
+String httpsGet(const String& url) {
   BearSSL::WiFiClientSecure client;
   client.setInsecure();
   return wifiHttpGet(url, client);

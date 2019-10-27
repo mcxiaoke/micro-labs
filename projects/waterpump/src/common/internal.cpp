@@ -321,3 +321,7 @@ unsigned char h2int(char c) {
   }
   return (0);
 }
+
+bool strEqual(const char* str1, const char* str2) {
+  return strcmp(str1, str2) == 0;
+}

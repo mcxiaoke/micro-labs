@@ -1,30 +1,36 @@
-//#define DEBUG_MODE 1
+#define DEBUG_MODE 1
 #define ENABLE_LOGGING 1
+
+// not working:https://www.esp8266.com/viewtopic.php?f=160&t=15872&start=4
+#define MQTT_KEEPALIVE 128
+#define MQTT_MAX_PACKET_SIZE 1024
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
+// #include <ESP8266WiFiMulti.h>
 #include <ESP8266mDNS.h>
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
 #include <FS.h>
 #include <NTPClient.h>
+#include <PubSubClient.h>
 #include <Updater.h>
 #include <WiFiClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <WiFiUdp.h>
 // #include <user_interface.h>
 #include "common/config.h"
-#include "common/data.h"
 #include "common/internal.h"
 #include "common/net.h"
 #include "libs/SimpleTimer.h"
 
 const char* JSON_CONFIG_FILE PROGMEM = "/file/config.json";
 const char* STATUS_FILE PROGMEM = "/file/status.json";
-
+const char* NTP_SERVER PROGMEM = "ntp.ntsc.ac.cn";
+const char* MQTT_TOPIC_TEST PROGMEM = "test";
+const char* MQTT_TOPIC_STATUS PROGMEM = "pump/status";
+const char* MQTT_TOPIC_CMD PROGMEM = "pump/cmd";
 int ledPin = 2;    // d4 2
 int pumpPin = D2;  // d2 io4
 
@@ -32,7 +38,8 @@ typedef struct {
   bool globalSwitchOn;
   unsigned long runInterval;       // ms
   unsigned long runDuration;       // ms
-  unsigned long updateInterval;    // ms
+  unsigned long statusInterval;    // ms
+  unsigned long mqttInterval;      // ms
   unsigned long watchDogInterval;  // ms
   unsigned long wifiInterval;      // ms
   unsigned long ntpInterval;       // ms
@@ -53,56 +60,35 @@ Status status = {0};
 bool wifiInitialized = false;
 unsigned long progressPrintMs;
 
-int runTimerId, wifiTimerId, watchdogTimerId;
+int runTimerId, statusTimerId, mqttTimerId, wifiTimerId, watchdogTimerId;
 
-SimpleTimer timer;
-ESP8266WiFiMulti wifiMgr;
-WiFiEventHandler wh1, wh2, wh3;
-
-void saveStatus();
-void pumpReport();
 String getStatusJson(bool);
 String getStatusText();
 String listFiles();
 void showESP();
 void fileLog(const String& text);
 void loadConfig();
+void saveStatus();
 void showPumpTaskInfo();
-void handleNotFound(AsyncWebServerRequest* req);
-void handleRoot(AsyncWebServerRequest* req);
-void handlePump(AsyncWebServerRequest* req);
-void handleSwitch(AsyncWebServerRequest* req);
 void handlePump0(bool action);
 void startPump();
 void stopPump();
 void pumpWatchDog();
+void pumpReport();
+void statusReport();
+void mqttPing();
+void mqttSend(const String& text);
+void mqttConnect();
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
+void setupMQTT();
 
-void apiStart(AsyncWebServerRequest* req);
-void apiStop(AsyncWebServerRequest* req);
-void apiOn(AsyncWebServerRequest* req);
-void apiOff(AsyncWebServerRequest* req);
-void apiReboot(AsyncWebServerRequest* req);
-void apiSetTimer(AsyncWebServerRequest* req);
-void apiDeleteFile(AsyncWebServerRequest* req);
-void apiClearLogs(AsyncWebServerRequest* req);
-
-void apiGetStatus(AsyncWebServerRequest* req);
-void apiGetLogs(AsyncWebServerRequest* req);
-void apiGetFiles(AsyncWebServerRequest* req);
-void apiViewFile(AsyncWebServerRequest* req);
-
-void handleOTARedirect(AsyncWebServerRequest* req);
-void handleOTAUpdate(AsyncWebServerRequest*,
-                     const String&,
-                     size_t,
-                     uint8_t*,
-                     size_t,
-                     bool);
-
-const char* ntpServer PROGMEM = "ntp.ntsc.ac.cn";
+SimpleTimer timer;
+// ESP8266WiFiMulti wifiMgr;
+WiFiEventHandler wh1, wh2, wh3;
+WiFiClient wc;
+PubSubClient mqtt(mqttServer, mqttPort, mqttCallback, wc);
 WiFiUDP ntpUDP;
-NTPClient ntp(ntpUDP, ntpServer, 0, 60 * 60 * 1000L);
-AsyncWebServer server(80);
+NTPClient ntp(ntpUDP, NTP_SERVER, 0, 8 * 60 * 60 * 1000L);
 
 void showESP() {
   LOGF("[System] Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
@@ -119,7 +105,7 @@ void saveStatus() {
   if (file) {
     file.println(getStatusJson(true));
     file.close();
-    LOGN(F("[Log] Write status file ok."));
+    // LOGN(F("[Log] Write status file ok."));
   } else {
     LOGN(F("[Log] Write status file failed."));
   }
@@ -127,7 +113,7 @@ void saveStatus() {
 
 void loadConfig() {
   File file = SPIFFS.open(STATUS_FILE, "r");
-  StaticJsonDocument<64> doc;
+  StaticJsonDocument<512> doc;
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(doc, file);
   if (error) {
@@ -201,17 +187,9 @@ void onWiFiGotIP(const WiFiEventStationModeGotIP& evt) {
   msg += WiFi.localIP().toString();
   if (wifiInitialized) {
     fileLog(msg);
+    mqttSend(msg);
   } else {
     LOGN(msg);
-  }
-}
-
-void handleNotFound(AsyncWebServerRequest* request) {
-  LOGN("[Server] handleNotFound url: " + request->url());
-  if (request->method() == HTTP_OPTIONS) {
-    request->send(200);
-  } else {
-    request->send(404);
   }
 }
 
@@ -223,13 +201,6 @@ void showPumpTaskInfo() {
   LOGF("[Pump] Next: %s, remain %s\n",
        dateTimeString(now() + timer.getRemain(runTimerId) / 1000).c_str(),
        humanTimeMs(timer.getRemain(runTimerId)).c_str());
-}
-
-void handleRoot(AsyncWebServerRequest* req) {
-  bool isOn = digitalRead(pumpPin) == HIGH;
-  LOG(F("[Server] handleRoot status="));
-  LOGN(isOn ? "On" : "Off");
-  req->redirect("/www/");
 }
 
 void handlePump0(bool turnOn) {
@@ -270,11 +241,11 @@ void handlePump0(bool turnOn) {
 }
 
 void pumpWatchDog() {
-  bool isOn = digitalRead(pumpPin) == 1;
-  LOGF("[Watchdog] pump lastRunAt: %s, now: %s status: %s\n",
-       timeString(status.lastOnAt).c_str(), timeString().c_str(),
-       isOn ? "On" : "Off");
-  showESP();
+  //   bool isOn = digitalRead(pumpPin) == 1;
+  //   LOGF("[Watchdog] pump lastOn: %s, now: %s status: %s mqtt: %d\n",
+  //        timeString(status.lastOnAt).c_str(), timeString().c_str(),
+  //        isOn ? "On" : "Off", mqtt.state());
+  //   showESP();
   if (status.startedMs > 0 &&
       millis() - status.startedMs > config.runDuration) {
     if (digitalRead(pumpPin) == HIGH) {
@@ -296,6 +267,7 @@ void stopPump() {
 
 String getStatusJson(bool pretty) {
   StaticJsonDocument<512> doc;
+  doc["device"] = WiFi.hostname();
   doc["ts"] = now();
   doc["up"] = millis() / 1000;
   doc["name"] = WiFi.hostname();
@@ -313,7 +285,7 @@ String getStatusJson(bool pretty) {
   doc["interval"] = config.runInterval;
   doc["duration"] = config.runDuration;
   doc["wifiPeriod"] = config.wifiInterval;
-  doc["updatePeriod"] = config.updateInterval;
+  doc["statusPeriod"] = config.statusInterval;
   doc["switch"] = config.globalSwitchOn;
   doc["stack"] = ESP.getFreeContStack();
   doc["heap"] = ESP.getFreeHeap();
@@ -330,25 +302,30 @@ String getStatusJson(bool pretty) {
 
   return json;
 }
+
 String getStatusText() {
-  String desp = "Global=";
+  String desp = "Device=";
+  desp += WiFi.hostname();
+  desp += "\nSwitch=";
   desp += config.globalSwitchOn ? "On" : "Off";
   desp += ("\nIP=");
   desp += (WiFi.localIP().toString());
   desp += ("\nSSID=");
   desp += (WiFi.SSID());
-  desp += ("\nWiFi Status=");
+  desp += ("\nWiFi=");
   desp += (WiFi.status());
   desp += "\nDateTime=";
   desp += nowString();
   desp += ("\nUpTime=");
   desp += humanTimeMs(millis());
+  desp += ("\nlastOffAt=");
+  desp += (timeString(status.lastOffAt));
   desp += ("\nlastRunAt2=");
-  desp += (dateTimeString(status.lastOnAt));
+  desp += (timeString(status.lastOnAt));
   desp += ("\nlastRunAt=");
-  desp += (dateTimeString(now() - timer.getElapsed(runTimerId) / 1000));
+  desp += (timeString(now() - timer.getElapsed(runTimerId) / 1000));
   desp += ("\nnextRunAt=");
-  desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
+  desp += timeString(now() + timer.getRemain(runTimerId) / 1000);
   desp += ("\nlastOnElapsed=");
   desp += humanTime(status.lastOnElapsed);
   desp += ("\ntotalElapsed=");
@@ -365,225 +342,6 @@ String getStatusText() {
   desp += "\nDebug=true";
 #endif
   return desp;
-}
-
-void handleRemoteGetStatusJson(AsyncWebServerRequest* req) {
-  req->send(200, "application/json", getStatusJson(true));
-}
-
-void handleRemoteGetStatusText(AsyncWebServerRequest* req) {
-  String text = getStatusText();
-  text.replace(", ", "\n");
-  req->send(200, "text/plain", text);
-}
-
-void handleOTARedirect(AsyncWebServerRequest* req) {
-  req->redirect("/www/update.html");
-}
-
-void handleOTAUpdate(AsyncWebServerRequest* request,
-                     const String& filename,
-                     size_t index,
-                     uint8_t* data,
-                     size_t len,
-                     bool final) {
-  if (!index) {
-    LOGN("[OTA] Update begin, file: " + filename);
-    size_t conentLength = request->contentLength();
-    // if filename includes spiffs, update the spiffs partition
-    int cmd = (filename.indexOf("spiffs") > -1) ? U_SPIFFS : U_FLASH;
-    Update.runAsync(true);
-    if (!Update.begin(conentLength, cmd, ledPin, LOW)) {
-      Update.printError(Serial);
-    }
-  }
-
-  if (Update.write(data, len) != len) {
-    Update.printError(Serial);
-  } else {
-    if (progressPrintMs == 0 || millis() - progressPrintMs > 500) {
-      LOGF("[OTA] Upload progress: %d%%\n",
-           (Update.progress() * 100) / Update.size());
-      progressPrintMs = millis();
-    }
-  }
-
-  if (final) {
-    request->send(200, "text/plain", "ok");
-    delay(1000);
-    if (!Update.end(true)) {
-      Update.printError(Serial);
-    } else {
-      setOTAUpdated();
-      fileLog("[OTA] Board firmware update completed.");
-      ESP.restart();
-    }
-  }
-}
-
-//////////
-void apiStart(AsyncWebServerRequest* req) {
-  startPump();
-//   req->send(200, "text/plain", "ok");
-  req->redirect("/");
-}
-void apiStop(AsyncWebServerRequest* req) {
-  stopPump();
-  req->redirect("/");
-}
-void apiOn(AsyncWebServerRequest* req) {
-  config.globalSwitchOn = true;
-  saveStatus();
-  req->redirect("/");
-}
-void apiOff(AsyncWebServerRequest* req) {
-  config.globalSwitchOn = false;
-  saveStatus();
-  req->redirect("/");
-}
-void apiReboot(AsyncWebServerRequest* req) {
-  LOG(F("[Server] Pump is rebooting..."));
-  req->redirect("/");
-  server.end();
-  ESP.restart();
-}
-
-void apiSetTimer(AsyncWebServerRequest* req) {
-  LOG(F("[Server] Set Timer"));
-  if (runTimerId > -1) {
-    timer.deleteTimer(runTimerId);
-  }
-  runTimerId = timer.setInterval(config.runInterval, startPump);
-  req->redirect("/");
-}
-
-void apiDeleteFile(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteDeleteFile"));
-  String output = "";
-  if (req->hasParam("file_path", true)) {
-    AsyncWebParameter* path = req->getParam("file_path", true);
-    String filePath = path->value();
-    if (SPIFFS.remove(filePath)) {
-      output = "File:";
-      output += filePath;
-      output += " is deleted.";
-      req->send(200, "text/plain", output);
-    } else {
-      output = "Failed to delete file:";
-      output += filePath;
-      req->send(404, "text/plain", output);
-    }
-  } else {
-    req->send(400, "text/plain", "Invalid Parameters.");
-  }
-}
-
-void apiClearLogs(AsyncWebServerRequest* req) {
-  bool removed = SPIFFS.remove(logFileName());
-  LOG(F("[Server] Pump logs cleared, result: "));
-  LOGN(removed ? "success" : "fail");
-  File f = SPIFFS.open(logFileName(), "w");
-  if (f) {
-    f.write((uint8_t)0x00);
-    f.close();
-  }
-  req->redirect("/");
-}
-
-void apiGetStatus(AsyncWebServerRequest* req) {
-  LOG(F("[Server] apiGetStatus "));
-  LOGN(req->getHeader("Accept")->toString());
-  bool useJson =
-      String("application/json")
-          .equalsIgnoreCase(req->getHeader("Accept")->value()) ||
-      (req->hasParam("format") &&
-       String("json").equalsIgnoreCase(req->getParam("format")->value()));
-  if (useJson) {
-    req->send(200, F("application/json"), getStatusJson(true));
-  } else {
-    String text = getStatusText();
-    text.replace(", ", "\n");
-    req->send(200, "text/plain", text);
-  }
-}
-void apiGetLogs(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] apiGetLogs"));
-  if (SPIFFS.exists(logFileName())) {
-    req->send(SPIFFS, logFileName(), "text/plain");
-  } else {
-    req->send(200, "text/plain", "");
-  }
-}
-void apiGetFiles(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteGetFiles"));
-  String content = listFiles();
-  req->send(200, "text/plain", content);
-}
-
-void apiViewFile(AsyncWebServerRequest* req) {
-  LOGN(F("[Server] handleRemoteEditFile"));
-  size_t hc = req->headers();
-  for (size_t i = 0; i < hc; i++) {
-    LOGF("[Header] %s : %s\n", req->headerName(i).c_str(),
-         req->header(i).c_str());
-  }
-  AsyncWebParameter* path = req->getParam("file-path", true);
-  AsyncWebParameter* data = req->getParam("file-data", true);
-  LOGF("file-path=");
-  LOGN(path->value());
-  LOGF("file-data=");
-  LOGN(data->value());
-  req->send(200, "text/plain", "ok");
-}
-//////////
-
-void setupApi() {
-  server.on("/api/reboot", HTTP_POST, apiReboot);
-  server.on("/api/timer", HTTP_POST, apiSetTimer);
-  server.on("/api/start", HTTP_POST, apiStart);
-  server.on("/api/stop", HTTP_POST, apiStop);
-  server.on("/api/on", HTTP_POST, apiOn);
-  server.on("/api/off", HTTP_POST, apiOff);
-  server.on("/api/clear_logs", HTTP_POST, apiClearLogs);
-  server.on("/api/delete_file", HTTP_POST, apiDeleteFile);
-
-  server.on("/api/files", HTTP_GET, apiGetFiles);
-  server.on("/api/logs", HTTP_GET, apiGetLogs);
-  server.on("/api/view", HTTP_POST, apiViewFile);
-  server.on("/api/status", HTTP_GET, apiGetStatus);
-}
-
-void setupServer() {
-  if (MDNS.begin("esp8266")) {  // Start the mDNS responder for esp8266.local
-    LOGN(F("[Server] mDNS responder started"));
-  } else {
-    LOGN(F("[Server] Error setting up MDNS responder!"));
-  }
-
-  // accessible at "<IP Address>/webserial" in browser
-  //   WebSerial.begin(&server);
-  //   WebSerial.msgCallback(webSerialRecv);
-  server.on("/", HTTP_GET, handleRoot);
-  server.onNotFound(handleNotFound);
-  server.serveStatic("/file/", SPIFFS, "/file/");
-  server.serveStatic("/www/", SPIFFS, "/www/")
-      .setLastModified(now() - millis() / 1000)
-      .setCacheControl("max-age=600")
-      .setDefaultFile("index.html");
-  server.on("/update", HTTP_GET, handleOTARedirect);
-  server.on("/update", HTTP_POST, [](AsyncWebServerRequest* request) {},
-            [](AsyncWebServerRequest* request, const String& filename,
-               size_t index, uint8_t* data, size_t len, bool final) {
-              handleOTAUpdate(request, filename, index, data, len, final);
-            });
-  setupApi();
-  DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), "*");
-  DefaultHeaders::Instance().addHeader("Server", WiFi.hostname());
-#ifdef DEBUG_MODE
-  DefaultHeaders::Instance().addHeader("DebugMode", "True");
-#endif
-  server.begin();
-  LOGN(F("[Server] HTTP server started"));
 }
 
 void setupNTP() {
@@ -607,20 +365,21 @@ void setupNTP() {
 
 void setupWiFi() {
   digitalWrite(ledPin, LOW);
-  wifiMgr.addAP(ap1_ssid, ap1_pass);
-  wifiMgr.addAP(ap2_ssid, ap2_pass);
+  //   wifiMgr.addAP(ap1_ssid, ap1_pass);
+  //   wifiMgr.addAP(ap2_ssid, ap2_pass);
   WiFi.mode(WIFI_STA);
-  WiFi.setSleepMode(WIFI_LIGHT_SLEEP);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setAutoReconnect(true);
+  WiFi.begin(ap1_ssid, ap1_pass);
   wh1 = WiFi.onStationModeConnected(&onWiFiConnected);
   wh2 = WiFi.onStationModeDisconnected(&onWiFiDisconnected);
   wh3 = WiFi.onStationModeGotIP(&onWiFiGotIP);
   LOGN(F("[WiFi] Connecting......"));
   int retry = 100;
-  while (wifiMgr.run() != WL_CONNECTED && --retry > 0) {
+  while (WiFi.status() != WL_CONNECTED && --retry > 0) {
     delay(500);
   }
-  if (wifiMgr.run() != WL_CONNECTED) {
+  if (WiFi.status() != WL_CONNECTED) {
     // wifi failed, reboot
     ESP.restart();
   }
@@ -643,6 +402,167 @@ void checkWiFi() {
     LOGN(F("[WiFi] connection lost, reconnecting..."));
     WiFi.reconnect();
   }
+}
+
+char* statusReportText() {
+  char* buf = (char*)malloc(1024);
+  int pos = 0;
+  pos += snprintf(buf, 1024, "%s%s", "Device=", WiFi.hostname().c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nSwitch=", config.globalSwitchOn ? "On" : "Off");
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nIP=", WiFi.localIP().toString().c_str());
+  pos +=
+      snprintf(buf + pos, 1024 - pos, "%s%s", "\nSSID=", WiFi.SSID().c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%d", "\nWiFi=", WiFi.status());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nDateTime=", nowString().c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nUpTime=", humanTimeMs(millis()).c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nlastAt2=", timeString(status.lastOnAt).c_str());
+  pos +=
+      snprintf(buf + pos, 1024 - pos, "%s%s", "\nlastAt=",
+               timeString(now() - timer.getElapsed(runTimerId) / 1000).c_str());
+  pos +=
+      snprintf(buf + pos, 1024 - pos, "%s%s", "\nnextAt=",
+               timeString(now() + timer.getRemain(runTimerId) / 1000).c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\nlastOnElapsed=", humanTime(status.lastOnElapsed).c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%s",
+                  "\ntotalElapsed=", humanTime(status.totalElapsed).c_str());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%d",
+                  "\nStack=", ESP.getFreeContStack());
+  pos += snprintf(buf + pos, 1024 - pos, "%s%d", "\nHeap=", ESP.getFreeHeap());
+
+  size_t len = strlen(buf);
+  LOGN(buf);
+  LOGN(len);
+  char* text = (char*)malloc(len + 1);
+  memset(text, 0, len + 1);
+  memcpy(text, buf, len);
+  free(buf);
+  return text;
+}
+
+void statusReport() {
+  mqttSend(getStatusText());
+}
+
+void mqttPing() {
+  mqtt.publish(MQTT_TOPIC_TEST, "ok");
+}
+
+void mqttSend(const String& text) {
+  LOGF("[MQTT] send message: %s\n", text.c_str());
+  bool ret = mqtt.publish(MQTT_TOPIC_STATUS, text.c_str());
+  if (ret) {
+    // LOGN("[MQTT] mqtt message sent successful.");
+  } else {
+    LOGN("[MQTT] mqtt message sent failed.");
+  }
+}
+
+void mqttConnect() {
+  // Loop until we're reconnected
+  int maxRetries = 10;
+  while (!mqtt.connected() && maxRetries-- > 0) {
+    LOGN("[MQTT] MQTT Connecting...");
+    // Attempt to connect
+    if (mqtt.connect(mqttClientId, mqttUser, mqttPass)) {
+      fileLog("[MQTT] Connected to " + String(mqttServer));
+      mqttSend("Pump is online at " + nowString());
+      mqtt.subscribe(MQTT_TOPIC_TEST);
+      mqtt.subscribe(MQTT_TOPIC_CMD);
+      //   mqtt.subscribe(MQTT_TOPIC_STATUS);
+      statusReport();
+    } else {
+      LOG("[MQTT] failed, rc=");
+      LOG(mqtt.state());
+      LOGN(" try again in 5 seconds");
+      // Wait 3 seconds before retrying
+      delay(3000);
+    }
+  }
+}
+
+void mqttReconnect() {
+  // Loop until we're reconnected
+  if (!mqtt.connected()) {
+    LOGN("[MQTT] retry connect...");
+    // Attempt to connect
+    if (mqtt.connect(mqttClientId, mqttUser, mqttPass)) {
+      LOG("[MQTT] Reconnected to");
+      LOGN(mqttServer);
+      fileLog("[MQTT] Reconnected to " + String(mqttServer));
+      mqttSend("Pump is online again at " + nowString());
+      mqtt.subscribe(MQTT_TOPIC_TEST);
+      mqtt.subscribe(MQTT_TOPIC_CMD);
+      //   mqtt.subscribe(MQTT_TOPIC_STATUS);
+      statusReport();
+    } else {
+      LOG("[MQTT] reconnect failed, rc=");
+      LOG(mqtt.state());
+    }
+  } else {
+    mqttPing();
+  }
+}
+
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
+  char* message = (char*)malloc(length + 1);
+  memset(message, 0, length + 1);
+  memcpy(message, payload, length);
+  LOGF("[MQTT] Message arrived [%s] (%s) <%d>\n", message, topic,
+       strlen(message));
+  if (strEqual(topic, MQTT_TOPIC_CMD)) {
+    // command received, handle it
+    if (strEqual(message, "start")) {
+      LOGN("[MQTT] cmd:start");
+      startPump();
+    } else if (strEqual(message, "stop")) {
+      LOGN("[MQTT] cmd:stop");
+      stopPump();
+    } else if (strEqual(message, "on")) {
+      LOGN("[MQTT] cmd:on");
+      config.globalSwitchOn = true;
+      mqttSend("Global switch on");
+    } else if (strEqual(message, "off")) {
+      LOGN("[MQTT] cmd:off");
+      config.globalSwitchOn = false;
+      mqttSend("Global switch off");
+    } else if (strEqual(message, "wifi")) {
+      LOGN("[MQTT] cmd:wifi");
+      String wf = "IP=";
+      wf += WiFi.localIP().toString();
+      wf += "\nSSID=";
+      wf += WiFi.SSID();
+      wf += "\nConnected=";
+      wf += WiFi.isConnected() ? "True" : "False";
+      mqttSend(wf);
+    } else if (strEqual(message, "status")) {
+      LOGN("[MQTT] cmd:status");
+      statusReport();
+    } else if (strEqual(message, "files")) {
+      LOGN("[MQTT] cmd:files");
+      mqttSend(listFiles());
+    } else if (strEqual(message, "logs")) {
+      LOGN("[MQTT] cmd:logs");
+      String logText = "---LOG BEGIN---\n";
+      logText += readLog(logFileName());
+      logText += "\n----LOG END----\n";
+      mqttSend(logText);
+    } else {
+      LOGN("[MQTT] cmd:unknown");
+      mqttSend("Error: unknown command");
+    }
+  }
+  free(message);
+  showESP();
+}
+
+void setupMQTT() {
+  mqttConnect();
 }
 
 String listFiles() {
@@ -670,18 +590,20 @@ void setupData() {
   debugMode = true;
   config.runInterval = 3 * 60 * 1000L;               // 3min
   config.runDuration = 15 * 1000L;                   // 15s
-  config.updateInterval = 5 * 60 * 1000L;            // 5min
+  config.statusInterval = 5 * 60 * 1000L;            // 5min
   config.watchDogInterval = config.runDuration / 2;  // 7s;
   config.ntpInterval = 8 * 60 * 1000L;               // 8min
   config.wifiInterval = 2 * 60 * 1000L;              // 2min
+  config.mqttInterval = 2 * 60 * 1000L;              // 2min
 #else
   debugMode = false;
   config.runInterval = 8 * 3600 * 1000L;             // 8 * 3 = 24 hours
   config.runDuration = 20 * 1000L;                   // 60/3=20 seconds
-  config.updateInterval = 4 * 3600 * 1000L;          // 4hours
+  config.statusInterval = 3600 * 1000L;              // 1hours
   config.watchDogInterval = config.runDuration / 2;  // 10s
   config.ntpInterval = 2 * 3600 * 1000L;             // 2 hours
   config.wifiInterval = 30 * 60 * 1000L;             // 30min
+  config.mqttInterval = 5 * 60 * 1000L;              // 5min
 #endif
   LOGF("[System] setupData, debug=%s\n", debugMode ? "True" : "False");
 }
@@ -690,11 +612,11 @@ void setupTimers() {
   LOGN(F("[System] Setup timers."));
   setSyncInterval(config.ntpInterval / 1000);  // in seconds
   setSyncProvider(ntpSync);
-  //   timer.setInterval(30 * 60 * 1000L, ntpUpdate);  // in milliseconds
-  wifiTimerId =
-      timer.setInterval(config.wifiInterval, checkWiFi);  // in milliseconds
+  wifiTimerId = timer.setInterval(config.wifiInterval, checkWiFi);
   runTimerId = timer.setInterval(config.runInterval, startPump);
   watchdogTimerId = timer.setInterval(config.watchDogInterval, pumpWatchDog);
+  mqttTimerId = timer.setInterval(config.mqttInterval, mqttReconnect);
+  statusTimerId = timer.setInterval(config.statusInterval, statusReport);
 }
 
 void setup() {
@@ -719,8 +641,8 @@ void setup() {
   setupData();
   setupWiFi();
   setupNTP();
-  setupServer();
   setupTimers();
+  setupMQTT();
   saveStatus();
   fileLog("[System] Board boot on " + nowString());
   showESP();
@@ -728,12 +650,11 @@ void setup() {
 }
 
 void loop() {
+  mqtt.loop();
   timer.run();
 }
 
 void pumpReport() {
-  LOGN(F("[Server] Pump report."));
-  //   showESP();
   bool isOn = digitalRead(pumpPin) == HIGH;
   if (isOn) {
     status.totalCounter++;
@@ -742,14 +663,7 @@ void pumpReport() {
     LOGN("[Server] Pump is scheduled at " +
          dateTimeString(now() + config.runInterval / 1000));
   }
-  bool debugMode = false;
-#ifdef DEBUG_MODE
-  debugMode = true;
-#endif
-  LOGF("[Report] Pump is %s at %s debugMode: %s\n",
-       isOn ? "Started" : "Stopped", nowString().c_str(),
-       (debugMode ? "True" : "False"));
-  String desp = "";
+  String desp = "[Pump]";
   desp += isOn ? " Started" : " Stopped";
   desp += " at ";
   desp += timeString(isOn ? status.lastOnAt : status.lastOffAt);
@@ -760,23 +674,8 @@ void pumpReport() {
     desp += humanTime(status.lastOnElapsed);
   }
   fileLog(desp);
-  //   desp += ", Next:";
-  //   desp += dateTimeString(now() + timer.getRemain(runTimerId) / 1000);
-  //   desp += ", IP:";
-  //   desp += WiFi.localIP().toString();
-  desp = "";
   saveStatus();
-#ifndef DEBUG_MODE
-  //   String data = "text=";
-  //   data += urlencode(F("Pump"));
-  //   data += urlencode(isOn ? F("_Started") : F("_Stopped"));
-  //   data += F("&desp=");
-  //   data += urlencode(isOn ? F(" Started at ") : F(" Stopped at "));
-  //   data += urlencode(timeString(isOn ? status.lastOnAt : status.lastOffAt));
-  //   httpsPost(reportUrl, data);
-  //   data = "";
-  //   LOGF("[Report] %s Pump action report is sent to server. \n",
-  //        WiFi.hostname().c_str());
   showESP();
-#endif
+  //   statusReport();
+  mqttSend(desp);
 }

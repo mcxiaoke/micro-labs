@@ -49,5 +49,6 @@ String URLEncode(const char* msg);
 String urldecode(String str);
 String urlencode(String str);
 unsigned char h2int(char c);
+bool strEqual(const char* str1, const char* str2);
 
 #endif
