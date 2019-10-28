@@ -1,4 +1,4 @@
-#define DEBUG_MODE
+//#define DEBUG_MODE
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -12,19 +12,21 @@
 const unsigned long RUN_INTERVAL = 60 * 1000L;
 const unsigned long RUN_DURATION = 18 * 1000L;
 #else
-const unsigned long RUN_INTERVAL = 8 * 3600 * 1000L;
-const unsigned long RUN_DURATION = 20 * 1000L;
+const unsigned long RUN_INTERVAL = 6 * 3600 * 1000L;
+const unsigned long RUN_DURATION = 15 * 1000L;
 #endif
 
 const char* ssid = STASSID;
 const char* password = STAPSK;
-const int led = 2;
+const int led = LED_BUILTIN;
 const int pump = D2;
 
 unsigned long lastStart = 0;
 unsigned long lastStop = 0;
 unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
+
+int runTimerId;
 
 void startPump();
 void stopPump();
@@ -105,12 +107,15 @@ void handleRoot() {
   data += "System Boot: ";
   data += formatDateTime(getTimestamp() - ts / 1000);
   data += "\n";
+  data += "Next Start: ";
+  data += formatDateTime(getTimestamp() + timer.getRemain(runTimerId) / 1000);
+  data += "\n";
   if (lastStart > 0) {
     data += "Last Start: ";
     data += formatDateTime(getTimestamp() - (ts - lastStart) / 1000);
     data += "\n";
   }
-  if (lastStart > 0) {
+  if (lastStop > 0) {
     data += "Last Stop: ";
     data += formatDateTime(getTimestamp() - (ts - lastStop) / 1000);
     data += "\n";
@@ -148,6 +153,11 @@ void setup(void) {
   pinMode(pump, OUTPUT);
   digitalWrite(led, LOW);
   Serial.begin(115200);
+  if (!SPIFFS.begin()) {
+    Serial.println(F("Failed to mount file system"));
+  } else {
+    Serial.println(F("SPIFFS file system mounted."));
+  }
   setupWiFi();
   initESPTime();
   if (MDNS.begin("esp8266")) {
@@ -157,10 +167,12 @@ void setup(void) {
   server.on("/api/status", handleRoot);
   server.on("/start", startPump);
   server.on("/stop", stopPump);
+  server.serveStatic("/file/", SPIFFS, "/file/");
+  server.serveStatic("/log", SPIFFS, "/file/log.txt");
   server.begin();
   debugLog("HTTP server started");
   digitalWrite(led, HIGH);
-  timer.setInterval(RUN_INTERVAL, startPump);
+  runTimerId = timer.setInterval(RUN_INTERVAL, startPump);
   timer.setInterval(RUN_DURATION / 2 + 1000, checkPump);
   timer.setInterval(10 * 60 * 1000L, checkWiFi);
   debugLog("System initialized");
