@@ -4,7 +4,7 @@
 static time_t upTimestamp = 0;  // in seconds
 
 void initESPTime() {
-  unsigned int timeOut = 5000;
+  unsigned int timeOut = 3000;
   time_t time = getNtpTime(timeOut);
   unsigned long startMs = millis();
   while (time < TIME_START && (millis() - startMs) < 30 * 1000L) {

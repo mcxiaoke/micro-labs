@@ -1,6 +1,7 @@
 #include "ntp.h"
 
-static const char ntpServerName[] = "ntp.ntsc.ac.cn";
+static const char ntpServer[] = "time.windows.com";
+// static const char ntpServer1[] = "ntp.ntsc.ac.cn";
 // NTP time is in the first 48 bytes of message
 static const int NTP_PACKET_SIZE = 48;
 static byte packetBuffer[NTP_PACKET_SIZE];
@@ -37,12 +38,10 @@ void sendNTPpacket(IPAddress& address) {
 time_t getNtpTime(unsigned int timeOut) {
   udp.begin(localPort);
   IPAddress ntpServerIP;  // NTP server's ip address
-
   while (udp.parsePacket() > 0)
     ;  // discard any previously received packets
-  // get a random server from the pool
-  WiFi.hostByName(ntpServerName, ntpServerIP);
-  Serial.print(ntpServerName);
+  WiFi.hostByName(ntpServer, ntpServerIP);
+  Serial.print(ntpServer);
   Serial.print(": ");
   Serial.println(ntpServerIP);
   Serial.println("Transmit NTP Request");
