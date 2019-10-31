@@ -6,7 +6,9 @@
 #include <ESP8266httpUpdate.h>
 #include <ESP8266mDNS.h>
 #include <FS.h>
+#include <LiquidCrystal_I2C.h>
 #include <WiFiClient.h>
+#include <Wire.h>
 #include "ESPTime.h"
 #include "SimpleTimer.h"
 #include "config.h"
@@ -15,24 +17,25 @@
 #define LED_BUILTIN 2
 
 #ifdef DEBUG_MODE
-const unsigned long RUN_INTERVAL = 60 * 1000L;
-const unsigned long RUN_DURATION = 18 * 1000L;
+const unsigned long RUN_INTERVAL = 60 * 1000UL;
+const unsigned long RUN_DURATION = 18 * 1000UL;
 #else
-const unsigned long RUN_INTERVAL = 6 * 3600 * 1000L;
-const unsigned long RUN_DURATION = 15 * 1000L;
+const unsigned long RUN_INTERVAL = 6 * 3600 * 1000UL;
+const unsigned long RUN_DURATION = 15 * 1000UL;
 #endif
 
 const char* ssid = STASSID;
 const char* password = STAPSK;
 const int led = LED_BUILTIN;
-const int pump = D2;
+const int pump = D5;
 
 unsigned long lastStart = 0;
 unsigned long lastStop = 0;
 unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
-int runTimerId;
+bool disabled = false;
+int runTimerId, lcdTimerId;
 
 static const char REBOOT_RESPONSE[] PROGMEM =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
@@ -41,10 +44,55 @@ void startPump();
 void stopPump();
 void checkPump();
 void checkWiFi();
+void setupDisplay();
+void updateDisplay(const String& line1, const String& line2);
+void updateDisplay(const char line1[], const char line2[]);
+void displayStatus();
 
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 SimpleTimer timer;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
+
+void setupDisplay() {
+  lcd.init();
+  lcd.backlight();
+  updateDisplay("WiFi Connecting", ".........");
+}
+
+void updateDisplay(const String& line1, const String& line2) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
+}
+
+void updateDisplay(const char line1[], const char line2[]) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
+}
+
+void clearDisplay() {
+  lcd.clear();
+}
+
+void displayStatus() {
+  char line1[17] = {0};
+  char line2[17] = {0};
+  bool isOn = digitalRead(pump) == HIGH;
+  const time_t nextRun = getTimestamp() + timer.getRemain(runTimerId) / 1000;
+  snprintf(line1, 17, "Next: %s", formatTime(nextRun).c_str());
+  snprintf(line2, 17, "Pump:%s WiFi:%s", isOn ? "ON" : "OF",
+           WiFi.isConnected() ? "ON" : "OF");
+  lcd.setCursor(0, 0);
+  lcd.print(line1);
+  lcd.setCursor(0, 1);
+  lcd.print(line2);
+}
 
 void showESP() {
   Serial.printf("Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
@@ -154,6 +202,24 @@ void handleStop() {
   }
 }
 
+void handleOn() {
+  if (server.hasArg("do")) {
+    server.send(200, "text/plain", "ok");
+    disabled = false;
+  } else {
+    server.send(200, "text/plain", "ignore");
+  }
+}
+
+void handleOff() {
+  if (server.hasArg("do")) {
+    server.send(200, "text/plain", "ok");
+    disabled = true;
+  } else {
+    server.send(200, "text/plain", "ignore");
+  }
+}
+
 void handleClear() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
@@ -195,36 +261,30 @@ void handleEnable() {
 }
 
 void handleRoot() {
-  unsigned long ts = millis();
+  auto ts = millis();
   String data = "";
-  data += "Status: ";
+  data += "Pump: ";
+  data += disabled ? "Disabled" : "Enabled";
+  data += "\nStatus: ";
   data += (digitalRead(pump) == HIGH) ? "Running" : "Idle";
-  data += "\n";
-  data += "Timer: ";
+  data += "\nTimer: ";
   data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
-  data += "\n";
-  data += "Last Elapsed: ";
+  data += "\nLast Elapsed: ";
   data += lastSeconds;
-  data += "s\n";
-  data += "Total Elapsed: ";
+  data += "s\nTotal Elapsed: ";
   data += totalSeconds;
-  data += "s\n";
-  data += "System Boot: ";
+  data += "s\nSystem Boot: ";
   data += formatDateTime(getTimestamp() - ts / 1000);
-  data += "\n";
   if (lastStart > 0) {
-    data += "Last Start: ";
+    data += "\nLast Start: ";
     data += formatDateTime(getTimestamp() - (ts - lastStart) / 1000);
-    data += "\n";
   }
   if (lastStop > 0) {
-    data += "Last Stop: ";
+    data += "\nLast Stop: ";
     data += formatDateTime(getTimestamp() - (ts - lastStop) / 1000);
-    data += "\n";
   }
-  data += "Next Start: ";
+  data += "\nNext Start: ";
   data += formatDateTime(getTimestamp() + timer.getRemain(runTimerId) / 1000);
-  data += "\n";
   server.send(200, "text/plain", data.c_str());
   showESP();
 }
@@ -265,6 +325,8 @@ void setupServer() {
   server.on("/", handleRoot);
   server.on("/api/status", handleRoot);
   server.on("/reboot", handleReboot);
+  server.on("/on", handleOn);
+  server.on("/off", handleOff);
   server.on("/start", handleStart);
   server.on("/stop", handleStop);
   server.on("/clear", handleClear);
@@ -283,12 +345,14 @@ void setupTimers() {
   runTimerId = timer.setInterval(RUN_INTERVAL, startPump);
   timer.setInterval(RUN_DURATION / 2 + 2000, checkPump);
   timer.setInterval(10 * 60 * 1000L, checkWiFi);
+  timer.setInterval(2 * 1000L, displayStatus);
 }
 
 void setup(void) {
   pinMode(led, OUTPUT);
   pinMode(pump, OUTPUT);
   Serial.begin(115200);
+  setupDisplay();
   delay(1000);
   if (!SPIFFS.begin()) {
     Serial.println(F("Failed to mount file system"));
@@ -299,6 +363,8 @@ void setup(void) {
   setupTime();
   setupServer();
   setupTimers();
+  clearDisplay();
+  displayStatus();
   debugLog(F("System initialized"));
 }
 

@@ -1,13 +1,15 @@
 #include "ntp.h"
 
-static const char ntpServer[] = "time.windows.com";
-// static const char ntpServer1[] = "ntp.ntsc.ac.cn";
+namespace {
+// const char ntpServer[] = "time.windows.com";
+const char ntpServer[] = "ntp.ntsc.ac.cn";
 // NTP time is in the first 48 bytes of message
-static const int NTP_PACKET_SIZE = 48;
-static byte packetBuffer[NTP_PACKET_SIZE];
+const int NTP_PACKET_SIZE = 48;
+byte packetBuffer[NTP_PACKET_SIZE];
 
-static WiFiUDP udp;
-static unsigned int localPort = 54321;
+WiFiUDP udp;
+unsigned int localPort = 54321;
+}  // namespace
 
 int getNtpTimeZone() {
   return TIME_ZONE_OFFSET;
@@ -46,7 +48,7 @@ time_t getNtpTime(unsigned int timeOut) {
   Serial.println(ntpServerIP);
   Serial.println("Transmit NTP Request");
   sendNTPpacket(ntpServerIP);
-  uint32_t beginWait = millis();
+  auto beginWait = millis();
   while (millis() - beginWait < timeOut) {
     delay(500);
     int size = udp.parsePacket();

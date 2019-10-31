@@ -32,7 +32,7 @@ static inline unsigned long elapsed() {
 }
 
 SimpleTimer::SimpleTimer() {
-  unsigned long current_millis = elapsed();
+  auto current_millis = elapsed();
 
   for (int i = 0; i < MAX_TIMERS; i++) {
     enabled[i] = false;
@@ -47,10 +47,7 @@ SimpleTimer::SimpleTimer() {
 
 void SimpleTimer::run() {
   int i;
-  unsigned long current_millis;
-
-  // get current time
-  current_millis = elapsed();
+  auto current_millis = elapsed();
 
   for (i = 0; i < MAX_TIMERS; i++) {
     toBeCalled[i] = DEFCALL_DONTRUN;
@@ -126,9 +123,7 @@ int SimpleTimer::findFirstFreeSlot() {
 }
 
 int SimpleTimer::setTimer(unsigned long d, timer_callback f, int n) {
-  int freeTimer;
-
-  freeTimer = findFirstFreeSlot();
+  int freeTimer = findFirstFreeSlot();
   if (freeTimer < 0) {
     return -1;
   }
