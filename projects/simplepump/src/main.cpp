@@ -7,6 +7,7 @@
 #include <ESP8266mDNS.h>
 #include <FS.h>
 #include <LiquidCrystal_I2C.h>
+// #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include <Wire.h>
 #include "ESPTime.h"
@@ -34,7 +35,6 @@ unsigned long lastStop = 0;
 unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
-bool disabled = false;
 int runTimerId, lcdTimerId;
 
 static const char REBOOT_RESPONSE[] PROGMEM =
@@ -166,7 +166,12 @@ void stopPump() {
   }
   digitalWrite(pump, LOW);
   digitalWrite(led, HIGH);
-  debugLog("Pump stopped");
+  String msg = "Pump stopped,last:";
+  msg += lastSeconds;
+  msg += "s,total:";
+  msg += totalSeconds;
+  msg += "s";
+  debugLog(msg);
 }
 
 void checkPump() {
@@ -202,24 +207,6 @@ void handleStop() {
   }
 }
 
-void handleOn() {
-  if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
-    disabled = false;
-  } else {
-    server.send(200, "text/plain", "ignore");
-  }
-}
-
-void handleOff() {
-  if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
-    disabled = true;
-  } else {
-    server.send(200, "text/plain", "ignore");
-  }
-}
-
 void handleClear() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
@@ -246,6 +233,7 @@ void handleDisable() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
     timer.disable(runTimerId);
+    debugLog("Timer disabled");
   } else {
     server.send(200, "text/plain", "ignore");
   }
@@ -255,6 +243,7 @@ void handleEnable() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
     timer.enable(runTimerId);
+    debugLog("Timer enabled");
   } else {
     server.send(200, "text/plain", "ignore");
   }
@@ -263,12 +252,10 @@ void handleEnable() {
 void handleRoot() {
   auto ts = millis();
   String data = "";
-  data += "Pump: ";
-  data += disabled ? "Disabled" : "Enabled";
+  data += "Timer: ";
+  data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
   data += "\nStatus: ";
   data += (digitalRead(pump) == HIGH) ? "Running" : "Idle";
-  data += "\nTimer: ";
-  data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
   data += "\nLast Elapsed: ";
   data += lastSeconds;
   data += "s\nTotal Elapsed: ";
@@ -325,13 +312,13 @@ void setupServer() {
   server.on("/", handleRoot);
   server.on("/api/status", handleRoot);
   server.on("/reboot", handleReboot);
-  server.on("/on", handleOn);
-  server.on("/off", handleOff);
   server.on("/start", handleStart);
   server.on("/stop", handleStop);
   server.on("/clear", handleClear);
   server.on("/disable", handleDisable);
   server.on("/enable", handleEnable);
+  server.on("/on", handleEnable);
+  server.on("/off", handleDisable);
   server.serveStatic("/file/", SPIFFS, "/file/");
   server.serveStatic("/www/", SPIFFS, "/www/");
   server.serveStatic("/log", SPIFFS, "/file/log.txt");
