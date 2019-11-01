@@ -10,10 +10,10 @@
 bool isMqttConnected();
 bool isMqttReq(const char topic[]);
 String getStatusTopic();
-String getRespTopic();
+String getLogTopic();
 String getReqTopic();
 void mqttStatus(const String& text);
-void mqttResp(const String& text);
+void mqttLog(const String& text);
 void mqttConnect();
 void mqttCheck();
 void mqttBegin(MQTT_CALLBACK_SIGNATURE);

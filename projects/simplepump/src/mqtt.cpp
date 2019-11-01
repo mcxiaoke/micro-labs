@@ -1,13 +1,18 @@
 #include "mqtt.h"
 
 const char* mqttServer PROGMEM = MQTT_SERVER;
-const char* mqttUser PROGMEM = MQTT_USER;
-const char* mqttPass PROGMEM = MQTT_PASS;
-const char* mqttClientId PROGMEM = MQTT_CLIENT_ID;
 const int mqttPort = MQTT_PORT;
 
 static WiFiClient wc;
 static PubSubClient mqtt(mqttServer, mqttPort, wc);
+
+String getMqttUser() {
+  return "PUMP_" + WiFi.hostname();
+}
+
+String getMqttPass() {
+  return "PUMP_" + WiFi.hostname();
+}
 
 bool isMqttConnected() {
   return mqtt.connected();
@@ -32,11 +37,11 @@ String getStatusTopic() {
   return topic;
 }
 
-String getRespTopic() {
-  // pump/%DEVICE%/resp
+String getLogTopic() {
+  // pump/%DEVICE%/log
   String topic = "pump/";
   topic += WiFi.hostname();
-  topic += "/resp";
+  topic += "/logs";
   return topic;
 }
 
@@ -66,9 +71,9 @@ void mqttStatus(const String& text) {
   }
 }
 
-void mqttResp(const String& text) {
+void mqttLog(const String& text) {
   //   LOGF("[MQTT] send message: [%s]\n", text.c_str());
-  bool ret = mqtt.publish(getRespTopic().c_str(), text.c_str());
+  bool ret = mqtt.publish(getLogTopic().c_str(), text.c_str());
   if (!ret) {
     LOGN("[MQTT] mqtt resp sent failed.");
   }
@@ -81,9 +86,13 @@ void mqttConnect() {
     LOGN("[MQTT] Connecting...");
     // Attempt to connect
     // offline will message retain
-    if (mqtt.connect(mqttClientId, mqttUser, mqttPass, getStatusTopic().c_str(),
-                     MQTTQOS2, true, "Pump is offline")) {
-      LOGN("[MQTT] Connected");
+    if (mqtt.connect(getMqttUser().c_str(), getMqttUser().c_str(),
+                     getMqttPass().c_str(), getStatusTopic().c_str(), MQTTQOS2,
+                     true, "Pump is offline")) {
+      LOG("[MQTT] Connected to ");
+      LOG(mqttServer);
+      LOG(" as client:");
+      LOGN(getMqttUser());
       mqttOnline();
       mqtt.subscribe("test");
       mqtt.subscribe(getReqTopic().c_str());
@@ -103,9 +112,12 @@ void mqttCheck() {
   if (!mqtt.connected()) {
     LOGN("[MQTT] Retry connect...");
     // Attempt to connect
-    if (mqtt.connect(mqttClientId, mqttUser, mqttPass)) {
+    if (mqtt.connect(getMqttUser().c_str(), getMqttUser().c_str(),
+                     getMqttPass().c_str())) {
       LOG("[MQTT] Reconnected to ");
-      LOGN(mqttServer);
+      LOG(mqttServer);
+      LOG(" as client:");
+      LOGN(getMqttUser());
       mqttStatus("Pump is online again");
       mqtt.subscribe("test");
       mqtt.subscribe(getReqTopic().c_str());

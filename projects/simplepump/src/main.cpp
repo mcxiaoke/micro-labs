@@ -6,7 +6,6 @@
 #include <ESP8266httpUpdate.h>
 #include <ESP8266mDNS.h>
 #include <FS.h>
-#include <LiquidCrystal_I2C.h>
 #include <WiFiClient.h>
 #include <Wire.h>
 #include "ESPTime.h"
@@ -34,7 +33,7 @@ unsigned long lastStop = 0;
 unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
-int runTimerId, lcdTimerId, mqttTimerId, statusTimerId;
+int runTimerId, mqttTimerId, statusTimerId;
 
 static const char REBOOT_RESPONSE[] PROGMEM =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
@@ -48,12 +47,7 @@ void checkWiFi();
 String getStatus();
 void statusReport();
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
-void setupDisplay();
-void updateDisplay(const String& line1, const String& line2);
-void updateDisplay(const char line1[], const char line2[]);
-void displayStatus();
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
 SimpleTimer timer;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -114,51 +108,11 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
       mqttStatus(logText);
     } else {
       LOGN("[MQTT] cmd:unknown");
-      mqttResp("Error: unknown command");
+      mqttLog("Error: unknown command");
     }
   }
   free(message);
   showESP();
-}
-
-void setupDisplay() {
-  lcd.init();
-  lcd.backlight();
-  updateDisplay("WiFi Connecting", ".........");
-}
-
-void updateDisplay(const String& line1, const String& line2) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(line1);
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
-}
-
-void updateDisplay(const char line1[], const char line2[]) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(line1);
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
-}
-
-void clearDisplay() {
-  lcd.clear();
-}
-
-void displayStatus() {
-  char line1[17] = {0};
-  char line2[17] = {0};
-  bool isOn = digitalRead(pump) == HIGH;
-  const time_t nextRun = getTimestamp() + timer.getRemain(runTimerId) / 1000;
-  snprintf(line1, 17, "Next: %s", formatTime(nextRun).c_str());
-  snprintf(line2, 17, "Pump:%s WiFi:%s", isOn ? "ON" : "OF",
-           WiFi.isConnected() ? "ON" : "OF");
-  lcd.setCursor(0, 0);
-  lcd.print(line1);
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
 }
 
 size_t debugLog(const String& text) {
@@ -167,7 +121,7 @@ size_t debugLog(const String& text) {
   msg += "] ";
   msg += text;
   Serial.println(msg);
-  mqttResp(msg);
+  mqttLog(msg);
   File f = SPIFFS.open("/file/log.txt", "a");
   if (!f) {
     return -1;
@@ -422,14 +376,12 @@ void setupTimers() {
   timer.setInterval((MQTT_KEEPALIVE * 2 - 3) * 1000L, mqttCheck);
   timer.setInterval(5 * 60 * 1000L, checkWiFi);
   timer.setInterval(60 * 60 * 1000L, statusReport);
-  timer.setInterval(5 * 1000L, displayStatus);
 }
 
 void setup(void) {
   pinMode(led, OUTPUT);
   pinMode(pump, OUTPUT);
   Serial.begin(115200);
-  setupDisplay();
   delay(1000);
   if (!SPIFFS.begin()) {
     Serial.println(F("Failed to mount file system"));
@@ -438,12 +390,10 @@ void setup(void) {
   }
   setupWiFi();
   setupDate();
-  debugLog(F("System initialized"));
   mqttBegin(mqttCallback);
   setupServer();
   setupTimers();
-  clearDisplay();
-  displayStatus();
+  debugLog(F("System initialized"));
 }
 
 void loop(void) {
