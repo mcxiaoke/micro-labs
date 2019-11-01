@@ -3,6 +3,7 @@
 
 #include <ESP8266WiFi.h>
 #include <time.h>
+#include "ntp.h"
 
 void initESPTime();
 time_t getTimestamp();

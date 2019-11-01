@@ -1,5 +1,4 @@
 #include "ESPTime.h"
-#include "ntp.h"
 
 static time_t upTimestamp = 0;  // in seconds
 

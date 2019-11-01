@@ -7,12 +7,11 @@
 #include <ESP8266mDNS.h>
 #include <FS.h>
 #include <LiquidCrystal_I2C.h>
-// #include <PubSubClient.h>
 #include <WiFiClient.h>
 #include <Wire.h>
 #include "ESPTime.h"
 #include "SimpleTimer.h"
-#include "config.h"
+#include "mqtt.h"
 
 #undef LED_BUILTIN
 #define LED_BUILTIN 2
@@ -35,15 +34,20 @@ unsigned long lastStop = 0;
 unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
-int runTimerId, lcdTimerId;
+int runTimerId, lcdTimerId, mqttTimerId, statusTimerId;
 
 static const char REBOOT_RESPONSE[] PROGMEM =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
 
+void doEnable();
+void doDisable();
 void startPump();
 void stopPump();
 void checkPump();
 void checkWiFi();
+String getStatus();
+void statusReport();
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
 void setupDisplay();
 void updateDisplay(const String& line1, const String& line2);
 void updateDisplay(const char line1[], const char line2[]);
@@ -53,6 +57,69 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 SimpleTimer timer;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdater;
+
+bool strEqual(const char* str1, const char* str2) {
+  return strcmp(str1, str2) == 0;
+}
+
+void showESP() {
+  Serial.printf("Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
+                ESP.getFreeHeap());
+}
+
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
+  yield();
+  char* message = (char*)malloc(length + 1);
+  memset(message, 0, length + 1);
+  memcpy(message, payload, length);
+  LOGF("[MQTT] Message arrived [%s] (%s) <%d>\n", message, topic,
+       strlen(message));
+  if (isMqttReq(topic)) {
+    // command received, handle it
+    if (strEqual(message, "start")) {
+      LOGN("[MQTT] cmd:start");
+      startPump();
+    } else if (strEqual(message, "stop")) {
+      LOGN("[MQTT] cmd:stop");
+      stopPump();
+    } else if (strEqual(message, "on")) {
+      LOGN("[MQTT] cmd:on");
+      doEnable();
+    } else if (strEqual(message, "off")) {
+      LOGN("[MQTT] cmd:off");
+      doDisable();
+    } else if (strEqual(message, "wifi")) {
+      LOGN("[MQTT] cmd:wifi");
+      String wf = "IP=";
+      wf += WiFi.localIP().toString();
+      wf += "\nSSID=";
+      wf += WiFi.SSID();
+      wf += "\nConnected=";
+      wf += WiFi.status();
+      mqttStatus(wf);
+    } else if (strEqual(message, "status")) {
+      LOGN("[MQTT] cmd:status");
+      statusReport();
+    } else if (strEqual(message, "system")) {
+      String msg = "Free Stack: ";
+      msg += ESP.getFreeContStack();
+      msg += ", Free Heap: ";
+      msg += ESP.getFreeHeap();
+      mqttStatus(msg);
+    } else if (strEqual(message, "logs")) {
+      LOGN("[MQTT] cmd:logs");
+      String logText = "Go to http://";
+      logText += WiFi.localIP().toString();
+      logText += "/file/log.txt";
+      mqttStatus(logText);
+    } else {
+      LOGN("[MQTT] cmd:unknown");
+      mqttResp("Error: unknown command");
+    }
+  }
+  free(message);
+  showESP();
+}
 
 void setupDisplay() {
   lcd.init();
@@ -94,17 +161,13 @@ void displayStatus() {
   lcd.print(line2);
 }
 
-void showESP() {
-  Serial.printf("Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
-                ESP.getFreeHeap());
-}
-
 size_t debugLog(const String& text) {
   String msg = "[";
   msg += dateTimeString();
   msg += "] ";
   msg += text;
   Serial.println(msg);
+  mqttResp(msg);
   File f = SPIFFS.open("/file/log.txt", "a");
   if (!f) {
     return -1;
@@ -142,6 +205,15 @@ void checkHttpUpdate() {
   }
 }
 
+void doEnable() {
+  timer.enable(runTimerId);
+  debugLog("Timer enabled");
+}
+void doDisable() {
+  timer.disable(runTimerId);
+  debugLog("Timer disabled");
+}
+
 void startPump() {
   bool isOn = digitalRead(pump) == HIGH;
   if (isOn) {
@@ -151,6 +223,7 @@ void startPump() {
   digitalWrite(pump, HIGH);
   digitalWrite(led, LOW);
   debugLog("Pump started");
+  mqttStatus("Pump started");
   timer.setTimeout(RUN_DURATION, stopPump);
 }
 
@@ -172,6 +245,7 @@ void stopPump() {
   msg += totalSeconds;
   msg += "s";
   debugLog(msg);
+  mqttStatus(msg);
 }
 
 void checkPump() {
@@ -187,6 +261,44 @@ void checkWiFi() {
     WiFi.reconnect();
     debugLog("WiFi reconnect");
   }
+}
+
+String getStatus() {
+  auto ts = millis();
+  String data = "";
+  data += "Device: ";
+  data += WiFi.hostname();
+  data += "\nTimer: ";
+  data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
+  data += "\nStatus: ";
+  data += (digitalRead(pump) == HIGH) ? "Running" : "Idle";
+  data += "\nMQTT: ";
+  data += isMqttConnected() ? "Connected" : "Disconnected";
+  data += "\nFree Stack: ";
+  data += ESP.getFreeContStack();
+  data += "\nFree Heap: ";
+  data += ESP.getFreeHeap();
+  data += "\nLast Elapsed: ";
+  data += lastSeconds;
+  data += "s\nTotal Elapsed: ";
+  data += totalSeconds;
+  data += "s\nSystem Boot: ";
+  data += formatDateTime(getTimestamp() - ts / 1000);
+  if (lastStart > 0) {
+    data += "\nLast Start: ";
+    data += formatDateTime(getTimestamp() - (ts - lastStart) / 1000);
+  }
+  if (lastStop > 0) {
+    data += "\nLast Stop: ";
+    data += formatDateTime(getTimestamp() - (ts - lastStop) / 1000);
+  }
+  data += "\nNext Start: ";
+  data += formatDateTime(getTimestamp() + timer.getRemain(runTimerId) / 1000);
+  return data;
+}
+
+void statusReport() {
+  mqttStatus(getStatus());
 }
 
 void handleStart() {
@@ -232,8 +344,7 @@ void handleReboot() {
 void handleDisable() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
-    timer.disable(runTimerId);
-    debugLog("Timer disabled");
+    doDisable();
   } else {
     server.send(200, "text/plain", "ignore");
   }
@@ -242,37 +353,14 @@ void handleDisable() {
 void handleEnable() {
   if (server.hasArg("do")) {
     server.send(200, "text/plain", "ok");
-    timer.enable(runTimerId);
-    debugLog("Timer enabled");
+    doEnable();
   } else {
     server.send(200, "text/plain", "ignore");
   }
 }
 
 void handleRoot() {
-  auto ts = millis();
-  String data = "";
-  data += "Timer: ";
-  data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
-  data += "\nStatus: ";
-  data += (digitalRead(pump) == HIGH) ? "Running" : "Idle";
-  data += "\nLast Elapsed: ";
-  data += lastSeconds;
-  data += "s\nTotal Elapsed: ";
-  data += totalSeconds;
-  data += "s\nSystem Boot: ";
-  data += formatDateTime(getTimestamp() - ts / 1000);
-  if (lastStart > 0) {
-    data += "\nLast Start: ";
-    data += formatDateTime(getTimestamp() - (ts - lastStart) / 1000);
-  }
-  if (lastStop > 0) {
-    data += "\nLast Stop: ";
-    data += formatDateTime(getTimestamp() - (ts - lastStop) / 1000);
-  }
-  data += "\nNext Start: ";
-  data += formatDateTime(getTimestamp() + timer.getRemain(runTimerId) / 1000);
-  server.send(200, "text/plain", data.c_str());
+  server.send(200, "text/plain", getStatus().c_str());
   showESP();
 }
 
@@ -301,7 +389,7 @@ void setupWiFi() {
   }
 }
 
-void setupTime() {
+void setupDate() {
   initESPTime();
 }
 
@@ -331,8 +419,10 @@ void setupServer() {
 void setupTimers() {
   runTimerId = timer.setInterval(RUN_INTERVAL, startPump);
   timer.setInterval(RUN_DURATION / 2 + 2000, checkPump);
-  timer.setInterval(10 * 60 * 1000L, checkWiFi);
-  timer.setInterval(2 * 1000L, displayStatus);
+  timer.setInterval((MQTT_KEEPALIVE * 2 - 3) * 1000L, mqttCheck);
+  timer.setInterval(5 * 60 * 1000L, checkWiFi);
+  timer.setInterval(60 * 60 * 1000L, statusReport);
+  timer.setInterval(5 * 1000L, displayStatus);
 }
 
 void setup(void) {
@@ -347,15 +437,17 @@ void setup(void) {
     Serial.println(F("SPIFFS file system mounted."));
   }
   setupWiFi();
-  setupTime();
+  setupDate();
+  debugLog(F("System initialized"));
+  mqttBegin(mqttCallback);
   setupServer();
   setupTimers();
   clearDisplay();
   displayStatus();
-  debugLog(F("System initialized"));
 }
 
 void loop(void) {
+  mqttLoop();
   server.handleClient();
   MDNS.update();
   timer.run();
