@@ -6,7 +6,7 @@
 #include "ntp.h"
 #include "compat.h"
 
-#ifdef DEBUG_LOG
+#if defined(EANBLE_LOGGING) || defined(DEBUG_MODE)
 #define LOG(...) Serial.print(__VA_ARGS__)
 #define LOGN(...) Serial.println(__VA_ARGS__)
 #define LOGF(...) Serial.printf(__VA_ARGS__)
@@ -16,7 +16,7 @@
 #define LOGF(...)
 #endif
 
-
+void _log(const char* format, ...);
 String listFiles();
 void fsCheck();
 String getDevice();

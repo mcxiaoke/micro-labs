@@ -1,7 +1,8 @@
-//#define DEBUG_MODE
-#define DEBUG_LOG
+
 #include <Arduino.h>
 #include <Wire.h>
+#include "libs/config.h"
+#include "libs/compat.h"
 #include "libs/FileServer.h"
 #include "libs/SimpleTimer.h"
 #include "libs/mqtt.h"
@@ -116,7 +117,7 @@ size_t debugLog(const String& text) {
   msg += dateTimeString();
   msg += "] ";
   msg += text;
-  Serial.println(msg);
+  LOGN(msg);
   mqttLog(msg);
   File f = SPIFFS.open("/file/log.txt", "a");
   if (!f) {
@@ -295,7 +296,7 @@ void handleRoot() {
   showESP();
 //   String data = "text=";
 //   data += urlencode("Pump_Status_Report_");
-//   data += urlencode(WiFi.hostname());
+//   data += urlencode(getDevice());
 //   data += "&desp=";
 //   data += urlencode(getStatus());
 //   httpsPost(WX_REPORT_URL, data);
@@ -307,7 +308,11 @@ void setupWiFi() {
   //   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
+#if defined(ESP8266)
   WiFi.hostname(getDevice().c_str());
+#elif defined(ESP32)
+  WiFi.setHostname(getDevice().c_str());
+#endif
   WiFi.begin(ssid, password);
   Serial.print("WiFi Connecting");
   unsigned long startMs = millis();
@@ -394,7 +399,7 @@ void handleNotFound() {
 }
 
 void setupServer() {
-  if (MDNS.begin(WiFi.hostname())) {
+  if (MDNS.begin(getDevice().c_str())) {
     LOGN(F("[Server] MDNS responder started"));
   }
   server.on("/", handleRoot);

@@ -1,15 +1,12 @@
 #ifndef __ESP_HTTP_NET_H__
 #define __ESP_HTTP_NET_H__
 
-#ifndef NET_DEBUG_LOG
-#define NET_DEBUG_LOG 1
-#endif
-
 #include "utils.h"
 
 typedef struct {
   int code;
-  String& payload;
+  String uri;
+  String payload;
 } HttpResult;
 
 HttpResult wifiHttpPost(const String&, const String&, WiFiClient& client);

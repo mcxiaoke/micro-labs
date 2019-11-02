@@ -4,13 +4,11 @@ HttpResult wifiHttpPost(const String& url,
                         const String& body,
                         WiFiClient& client) {
   HTTPClient http;
-  if (NET_DEBUG_LOG) {
-    LOGF("[HTTP] POST, url: %s\n", url.c_str());
-  }
+  LOGF("[HTTP] POST, url: %s\n", url.c_str());
   int httpCode = -1;
   String payload = "";
   if (http.begin(client, url)) {  // HTTP
-    // Serial.print("[HTTP] POST sending...\n");
+    // LOGN("[HTTP] POST sending...");
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
     // LOGF("[HTTP] POST, body: %s\n", urldecode(body).c_str());
     httpCode = http.POST(body);
@@ -19,7 +17,7 @@ HttpResult wifiHttpPost(const String& url,
       LOGF("[HTTP] POST, code: %d\n", httpCode);
       // file found at server
       payload = http.getString();
-      //   LOGF("[HTTP] POST, content: %s\n", payload.c_str());
+      LOGF("[HTTP] POST, content: %s\n", payload.c_str());
     } else {
       LOGF("[HTTP] POST, error: %s\n", http.errorToString(httpCode).c_str());
     }
@@ -28,7 +26,7 @@ HttpResult wifiHttpPost(const String& url,
   }
   http.end();
   yield();
-  HttpResult ret = {httpCode, payload};
+  HttpResult ret = {httpCode, url, payload};
   return ret;
 }
 
@@ -38,14 +36,14 @@ HttpResult wifiHttpGet(const String& url, WiFiClient& client) {
   int httpCode = -1;
   String payload = "";
   if (http.begin(client, url)) {  // HTTP
-                                  // Serial.print("[HTTP] GET sending...\n");
+    // LOGN("[HTTP] GET sending...");
     httpCode = http.GET();
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
       LOGF("[HTTP] GET, code: %d\n", httpCode);
       // file found at server
       payload = http.getString();
-      //   LOGF("[HTTP] GET, content: %s\n", payload.c_str());
+      LOGF("[HTTP] GET, content: %s\n", payload.c_str());
     } else {
       LOGF("[HTTP] GET, error: %s\n", http.errorToString(httpCode).c_str());
     }
@@ -53,7 +51,7 @@ HttpResult wifiHttpGet(const String& url, WiFiClient& client) {
     LOGN("[HTTP] GET failed.");
   }
   http.end();
-  HttpResult ret = {httpCode, payload};
+  HttpResult ret = {httpCode, url, payload};
   return ret;
 }
 
@@ -68,13 +66,23 @@ HttpResult httpGet(const String& url) {
 }
 
 HttpResult httpsPost(const String& url, const String& body) {
+#if defined(ESP8266)
   BearSSL::WiFiClientSecure client;
   client.setInsecure();
+#elif defined(ESP32)
+  WiFiClientSecure client;
+//   client.setInsecure();
+#endif
   return wifiHttpPost(url, body, client);
 }
 
 HttpResult httpsGet(const String& url) {
+#if defined(ESP8266)
   BearSSL::WiFiClientSecure client;
   client.setInsecure();
+#elif defined(ESP32)
+  WiFiClientSecure client;
+//   client.setInsecure();
+#endif
   return wifiHttpGet(url, client);
 }

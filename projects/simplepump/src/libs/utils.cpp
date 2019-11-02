@@ -2,7 +2,16 @@
 
 static time_t upTimestamp = 0;  // in seconds
 
-
+void _log(const char* format, ...) {
+#if defined(EANBLE_LOGGING) || defined(DEBUG_MODE)
+  char buffer[256];
+  va_list args;
+  va_start(args, format);
+  vsprintf(buffer, format, args);
+  va_end(args);
+  Serial.print(buffer);
+#endif
+}
 
 String listFiles() {
   String output = "";
@@ -75,13 +84,12 @@ String getMD5(const String& data) {
 
 void showESP() {
 #if defined(ESP8266)
-  Serial.printf("Free Stack: %d, Free Heap: %d\n", ESP.getFreeContStack(),
-                ESP.getFreeHeap());
+  Serial.printf("[System] Free Stack: %d, Free Heap: %d\n",
+                ESP.getFreeContStack(), ESP.getFreeHeap());
 #elif defined(ESP32)
-  Serial.printf("Free Heap: %d\n", ESP.getFreeHeap());
+  Serial.printf("[System] Free Heap: %d\n", ESP.getFreeHeap());
 #endif
 }
-
 
 String logFileName() {
   String fileName = "/file/log-";
@@ -158,7 +166,6 @@ String dateString() {
 String dateTimeString() {
   return formatDateTime(getTimestamp());
 }
-
 
 String timeString() {
   return formatTime(getTimestamp());
