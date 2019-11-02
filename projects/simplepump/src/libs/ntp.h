@@ -3,7 +3,7 @@
 
 #include <WiFiUdp.h>
 #include <time.h>
-#include "ESPCompat.h"
+#include "compat.h"
 
 #ifndef TIME_ZONE_OFFSET
 #define TIME_ZONE_OFFSET (8)
@@ -22,7 +22,7 @@
 #define SECS_DELTA_1900_1970 (2208988800UL)
 #endif
 
-const time_t TIME_START = 1500000000L;  // in seconds
+const time_t TIME_START_2019 = 1500000000L;  // in seconds
 
 void sendNTPpacket(IPAddress& address);
 time_t getNtpTime(unsigned int timeOut);

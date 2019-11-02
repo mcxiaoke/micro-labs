@@ -63,7 +63,7 @@ time_t getNtpTime(unsigned int timeOut) {
       secsSince1900 |= (unsigned long)packetBuffer[43];
       time_t ts = secsSince1900 - SECS_DELTA_1900_1970 +
                   getNtpTimeZone() * SECS_PER_HOUR;
-      if (ts > TIME_START) {
+      if (ts > TIME_START_2019) {
         Serial.print("[NTP] Timestamp: ");
         Serial.println(ts);
         return ts;

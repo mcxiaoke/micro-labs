@@ -1,11 +1,12 @@
 //#define DEBUG_MODE
+#define DEBUG_LOG
 #include <Arduino.h>
 #include <Wire.h>
-#include "ESPCompat.h"
-#include "ESPTime.h"
-#include "FileServer.h"
-#include "SimpleTimer.h"
-#include "mqtt.h"
+#include "libs/FileServer.h"
+#include "libs/SimpleTimer.h"
+#include "libs/mqtt.h"
+#include "libs/net.h"
+#include "libs/utils.h"
 
 #undef LED_BUILTIN
 #define LED_BUILTIN 2
@@ -56,10 +57,6 @@ ESP8266HTTPUpdateServer httpUpdater;
 #elif defined(ESP32)
 WebServer server(80);
 #endif
-
-bool strEqual(const char* str1, const char* str2) {
-  return strcmp(str1, str2) == 0;
-}
 
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   yield();
@@ -296,6 +293,12 @@ void handleEnable() {
 void handleRoot() {
   server.send(200, "text/plain", getStatus().c_str());
   showESP();
+//   String data = "text=";
+//   data += urlencode("Pump_Status_Report_");
+//   data += urlencode(WiFi.hostname());
+//   data += "&desp=";
+//   data += urlencode(getStatus());
+//   httpsPost(WX_REPORT_URL, data);
 }
 
 void setupWiFi() {
@@ -312,6 +315,7 @@ void setupWiFi() {
     delay(1000);
     Serial.print(".");
   }
+  Serial.println();
   if (WiFi.isConnected()) {
     Serial.println("");
     Serial.print("Connected to ");
@@ -325,7 +329,7 @@ void setupWiFi() {
 }
 
 void setupDate() {
-  initESPTime();
+  setTimestamp();
 }
 
 void setupUpdate() {

@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <FS.h>
+#include <WiFiUdp.h>
 #if defined(ESP8266)
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
@@ -10,6 +11,8 @@
 #include <ESP8266httpUpdate.h>
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecureBearSSL.h>
 #elif defined(ESP32)
 #include <SPIFFS.h>
 #include <ESPmDNS.h>
@@ -20,8 +23,5 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #endif
-
-String listFiles();
-void fsCheck();
 
 #endif
