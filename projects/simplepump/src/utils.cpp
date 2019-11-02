@@ -1,10 +1,9 @@
 #include "utils.h"
 
-String getUDID() {
+String getDevice() {
   String mac = WiFi.macAddress();
   mac.replace(":", "");
-  mac.toLowerCase();
-  return mac;
+  return mac.substring(mac.length() / 2);
 }
 
 String getMD5(uint8_t* data, uint16_t len) {

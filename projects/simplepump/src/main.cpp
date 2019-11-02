@@ -1,12 +1,9 @@
 //#define DEBUG_MODE
 #include <Arduino.h>
-#include <FS.h>
-#include <SPIFFS.h>
 #include <Wire.h>
 #include "ESPCompat.h"
 #include "ESPTime.h"
 #include "FileServer.h"
-#include "INIReader.h"
 #include "SimpleTimer.h"
 #include "mqtt.h"
 
@@ -33,10 +30,11 @@ unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
 int runTimerId, mqttTimerId, statusTimerId;
-
+#if defined(ESP32)
 static const char* UPDATE_INDEX =
     "<form method='POST' action='/update' enctype='multipart/form-data'><input "
     "type='file' name='update'><input type='submit' value='Update'></form>";
+#endif
 static const char REBOOT_RESPONSE[] =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
 
@@ -54,6 +52,7 @@ SimpleTimer timer;
 
 #if defined(ESP8266)
 ESP8266WebServer server(80);
+ESP8266HTTPUpdateServer httpUpdater;
 #elif defined(ESP32)
 WebServer server(80);
 #endif
@@ -64,8 +63,8 @@ bool strEqual(const char* str1, const char* str2) {
 
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   yield();
-  char message[length+1];
-//   char* message = (char*)malloc(length + 1);
+  char message[length + 1];
+  //   char* message = (char*)malloc(length + 1);
   memset(message, 0, length + 1);
   memcpy(message, payload, length);
   LOGF("[MQTT] Message arrived [%s] (%s) <%d>\n", message, topic,
@@ -97,10 +96,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
       LOGN("[MQTT] cmd:status");
       statusReport();
     } else if (strEqual(message, "system")) {
-      String msg = "Free Stack: ";
-      //   msg += ESP.getFreeContStack();
-      msg += ESP.getFreePsram();
-      msg += ", Free Heap: ";
+      String msg = "Free Heap: ";
       msg += ESP.getFreeHeap();
       mqttStatus(msg);
     } else if (strEqual(message, "logs")) {
@@ -114,7 +110,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
       mqttLog("Error: unknown command");
     }
   }
-//   free(message);
+  //   free(message);
   showESP();
 }
 
@@ -196,8 +192,8 @@ void checkWiFi() {
 String getStatus() {
   auto ts = millis();
   String data = "";
-  data += "UDID: ";
-  data += getUDID();
+  data += "Device: ";
+  data += getDevice();
   data += "\nTimer: ";
   data += timer.isEnabled(runTimerId) ? "Enabled" : "Disabled";
   data += "\nStatus: ";
@@ -308,6 +304,7 @@ void setupWiFi() {
   //   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
+  WiFi.hostname(getDevice().c_str());
   WiFi.begin(ssid, password);
   Serial.print("WiFi Connecting");
   unsigned long startMs = millis();
@@ -332,6 +329,9 @@ void setupDate() {
 }
 
 void setupUpdate() {
+#if defined(ESP8266)
+  httpUpdater.setup(&server);
+#elif defined(ESP32)
   server.on("/update", HTTP_GET, []() {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", UPDATE_INDEX);
@@ -377,16 +377,20 @@ void setupUpdate() {
               upload.status);
         }
       });
+#endif
 }
 
 void handleNotFound() {
   if (!handleFileRead(&server)) {
-    server.send(404, "text/plain", "404 NOT FOUND");
+    String data = "ERROR: 404 NOT FOUND\nURI: ";
+    data += server.uri();
+    data += "\n";
+    server.send(404, "text/plain", data);
   }
 }
 
 void setupServer() {
-  if (MDNS.begin(getUDID().c_str())) {
+  if (MDNS.begin(WiFi.hostname())) {
     LOGN(F("[Server] MDNS responder started"));
   }
   server.on("/", handleRoot);
@@ -400,8 +404,8 @@ void setupServer() {
   server.on("/on", handleEnable);
   server.on("/off", handleDisable);
   server.on("/files", handleFiles);
-//   server.serveStatic("/file/", SPIFFS, "/file/");
-//   server.serveStatic("/www/", SPIFFS, "/www/");
+  //   server.serveStatic("/file/", SPIFFS, "/file/");
+  //   server.serveStatic("/www/", SPIFFS, "/www/");
   server.serveStatic("/log", SPIFFS, "/file/log.txt");
   server.onNotFound(handleNotFound);
   setupUpdate();
@@ -424,21 +428,13 @@ void setup(void) {
   Serial.begin(115200);
   delay(1000);
   showESP();
-  if (!SPIFFS.begin(true)) {
-    Serial.println(F("[System] Failed to mount file system"));
-  } else {
-    Serial.println(F("[System] SPIFFS file system mounted."));
-  }
+  fsCheck();
   setupWiFi();
   setupDate();
   mqttBegin(mqttCallback);
   setupServer();
   setupTimers();
   debugLog(F("System initialized"));
-
-  std::string s("hello, world!");
-  s += " esp";
-  Serial.println(s.c_str());
 }
 
 void loop(void) {

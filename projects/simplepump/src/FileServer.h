@@ -5,11 +5,11 @@
 #include <ESP8266WebServer.h>
 #define SERVER_CLASS ESP8266WebServer
 #elif defined(ESP32)
+#include <SPIFFS.h>
 #include <WebServer.h>
 #define SERVER_CLASS WebServer
 #endif
 #include <FS.h>
-#include <SPIFFS.h>
 #include "utils.h"
 
 bool handleFileRead(SERVER_CLASS* server) {

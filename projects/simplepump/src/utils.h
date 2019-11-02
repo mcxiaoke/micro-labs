@@ -12,7 +12,7 @@
 #endif
 #include <MD5Builder.h>
 
-String getUDID();
+String getDevice();
 String getMD5(uint8_t* data, uint16_t len);
 String getMD5(const char* data);
 String getMD5(const String& data);

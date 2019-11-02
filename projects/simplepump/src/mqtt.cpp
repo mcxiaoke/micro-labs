@@ -15,7 +15,7 @@ String getMqttPass() {
 }
 
 String getMqttClientId() {
-  return String("esp-") + getUDID();
+  return getDevice();
 }
 
 bool isMqttConnected() {
@@ -29,14 +29,14 @@ bool isMqttReq(const char topic[]) {
 String getMyTopic() {
   // pump/%DEVICE%
   String topic = "pump/";
-  topic += getUDID();
+  topic += getDevice();
   return topic;
 }
 
 String getStatusTopic() {
   // pump/%DEVICE%/status
   String topic = "pump/";
-  topic += getUDID();
+  topic += getDevice();
   topic += "/status";
   return topic;
 }
@@ -44,7 +44,7 @@ String getStatusTopic() {
 String getLogTopic() {
   // pump/%DEVICE%/log
   String topic = "pump/";
-  topic += getUDID();
+  topic += getDevice();
   topic += "/logs";
   return topic;
 }
@@ -52,7 +52,7 @@ String getLogTopic() {
 String getReqTopic() {
   // pump/%DEVICE%/req
   String topic = "pump/";
-  topic += getUDID();
+  topic += getDevice();
   topic += "/req";
   return topic;
 }

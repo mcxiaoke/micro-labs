@@ -7,8 +7,7 @@ String listFiles() {
 
   Dir f = SPIFFS.openDir("/");
   while (f.next()) {
-    Serial.println("[File] %s (%d bytes)\n", f.fileName().c_str(),
-                   f.fileSize());
+    Serial.printf("[File] %s (%d bytes)\n", f.fileName().c_str(), f.fileSize());
     output += f.fileName();
     output += "\n";
   };
@@ -30,4 +29,16 @@ String listFiles() {
 
 #endif
   return output;
+}
+
+void fsCheck() {
+#if defined(ESP8266)
+  if (!SPIFFS.begin()) {
+#elif defined(ESP32)
+  if (!SPIFFS.begin(true)) {
+#endif
+    Serial.println(F("[System] Failed to mount file system"));
+  } else {
+    Serial.println(F("[System] SPIFFS file system mounted."));
+  }
 }
