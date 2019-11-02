@@ -11,10 +11,10 @@ void initESPTime() {
   }
   if (time > TIME_START) {
     upTimestamp = time - millis() / 1000;
-    Serial.print("NTP Time: ");
+    Serial.print("[NTP] Time: ");
     Serial.println(dateTimeString());
   } else {
-    Serial.println("NTP time failed\n");
+    Serial.println("[NTP] time failed\n");
   }
 }
 

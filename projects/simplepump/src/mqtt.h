@@ -2,10 +2,11 @@
 #define __MQTT_H__
 
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
 #include <PubSubClient.h>
+#include "ESPCompat.h"
 #include "ESPTime.h"
 #include "config.h"
+#include "utils.h"
 
 bool isMqttConnected();
 bool isMqttReq(const char topic[]);

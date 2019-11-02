@@ -1,8 +1,7 @@
 #ifndef __ESP_TIME_H__
 #define __ESP_TIME_H__
-
-#include <ESP8266WiFi.h>
 #include <time.h>
+#include "ESPCompat.h"
 #include "ntp.h"
 
 void initESPTime();

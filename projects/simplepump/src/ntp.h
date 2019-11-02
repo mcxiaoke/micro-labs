@@ -1,9 +1,9 @@
-#ifndef __NTP_H__
-#define __NTP_H__
+#ifndef __NTP__H__
+#define __NTP__H__
 
-#include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <time.h>
+#include "ESPCompat.h"
 
 #ifndef TIME_ZONE_OFFSET
 #define TIME_ZONE_OFFSET (8)

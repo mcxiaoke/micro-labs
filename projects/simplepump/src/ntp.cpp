@@ -46,14 +46,14 @@ time_t getNtpTime(unsigned int timeOut) {
   Serial.print(ntpServer);
   Serial.print(": ");
   Serial.println(ntpServerIP);
-  Serial.println("Transmit NTP Request");
+  Serial.println("[NTP] Transmit NTP Request");
   sendNTPpacket(ntpServerIP);
   auto beginWait = millis();
   while (millis() - beginWait < timeOut) {
     delay(500);
     int size = udp.parsePacket();
     if (size >= NTP_PACKET_SIZE) {
-      Serial.println("Receive NTP Response");
+      Serial.println("[NTP] Receive NTP Response");
       udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
       unsigned long secsSince1900;
       // convert four bytes starting at location 40 to a long integer
@@ -64,12 +64,12 @@ time_t getNtpTime(unsigned int timeOut) {
       time_t ts = secsSince1900 - SECS_DELTA_1900_1970 +
                   getNtpTimeZone() * SECS_PER_HOUR;
       if (ts > TIME_START) {
-        Serial.print("NTP Timestamp: ");
+        Serial.print("[NTP] Timestamp: ");
         Serial.println(ts);
         return ts;
       }
     }
   }
-  Serial.println("No NTP Response :-(");
+  Serial.println("[NTP] No Response :-(");
   return 0;  // return 0 if unable to get the time
 }
