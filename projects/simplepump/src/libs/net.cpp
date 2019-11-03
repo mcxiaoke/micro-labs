@@ -26,7 +26,7 @@ HttpResult wifiHttpPost(const String& url,
   }
   http.end();
   yield();
-  HttpResult ret = {httpCode, url, payload};
+  HttpResult ret{httpCode, url, payload};
   return ret;
 }
 
@@ -51,7 +51,7 @@ HttpResult wifiHttpGet(const String& url, WiFiClient& client) {
     LOGN("[HTTP] GET failed.");
   }
   http.end();
-  HttpResult ret = {httpCode, url, payload};
+  HttpResult ret{httpCode, url, payload};
   return ret;
 }
 

@@ -7,10 +7,10 @@
 #include "utils.h"
 
 bool isMqttConnected();
-bool isMqttReq(const char topic[]);
+bool isMqttCmd(const char topic[]);
 String getStatusTopic();
 String getLogTopic();
-String getReqTopic();
+String getCmdTopic();
 void mqttStatus(const String& text);
 void mqttLog(const String& text);
 void mqttConnect();

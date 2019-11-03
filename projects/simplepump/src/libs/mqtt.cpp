@@ -22,8 +22,8 @@ bool isMqttConnected() {
   return mqtt.connected();
 }
 
-bool isMqttReq(const char topic[]) {
-  return strcmp(getReqTopic().c_str(), topic) == 0;
+bool isMqttCmd(const char topic[]) {
+  return strcmp(getCmdTopic().c_str(), topic) == 0;
 }
 
 String getMyTopic() {
@@ -49,11 +49,11 @@ String getLogTopic() {
   return topic;
 }
 
-String getReqTopic() {
-  // pump/%DEVICE%/req
+String getCmdTopic() {
+  // pump/%DEVICE%/cmd
   String topic = "pump/";
   topic += getDevice();
-  topic += "/req";
+  topic += "/cmd";
   return topic;
 }
 
@@ -100,7 +100,7 @@ void mqttConnect() {
       LOGN(getMqttClientId());
       mqttOnline();
       mqtt.subscribe("test");
-      mqtt.subscribe(getReqTopic().c_str());
+      mqtt.subscribe(getCmdTopic().c_str());
       //   statusReport();
     } else {
       LOGN("[MQTT] Connect failed, rc=");
@@ -125,7 +125,7 @@ void mqttCheck() {
       LOGN(getMqttClientId());
       mqttOnline();
       mqtt.subscribe("test");
-      mqtt.subscribe(getReqTopic().c_str());
+      mqtt.subscribe(getCmdTopic().c_str());
       //   statusReport();
     } else {
       LOG("[MQTT] Reconnect failed, rc=");

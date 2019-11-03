@@ -3,11 +3,11 @@
 
 #include "utils.h"
 
-typedef struct {
-  int code;
-  String uri;
-  String payload;
-} HttpResult;
+struct HttpResult {
+  const int code;
+  const String& uri;
+  const String& payload;
+};
 
 HttpResult wifiHttpPost(const String&, const String&, WiFiClient& client);
 HttpResult wifiHttpGet(const String&, WiFiClient& client);

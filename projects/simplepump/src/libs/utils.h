@@ -2,9 +2,9 @@
 #define __UTILS_H__
 
 #include <MD5Builder.h>
-#include "tools.h"
-#include "ntp.h"
 #include "compat.h"
+#include "ntp.h"
+#include "tools.h"
 
 #if defined(EANBLE_LOGGING) || defined(DEBUG_MODE)
 #define LOG(...) Serial.print(__VA_ARGS__)
