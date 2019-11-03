@@ -2,16 +2,16 @@
 
 static time_t upTimestamp = 0;  // in seconds
 
-void _log(const char* format, ...) {
-#if defined(EANBLE_LOGGING) || defined(DEBUG_MODE)
-  char buffer[256];
-  va_list args;
-  va_start(args, format);
-  vsprintf(buffer, format, args);
-  va_end(args);
-  Serial.print(buffer);
-#endif
-}
+// void _log(const char* format, ...) {
+// #if defined(EANBLE_LOGGING) || defined(DEBUG_MODE)
+//   char buffer[256];
+//   va_list args;
+//   va_start(args, format);
+//   vsprintf(buffer, format, args);
+//   va_end(args);
+//   Serial.print(buffer);
+// #endif
+// }
 
 String listFiles() {
   String output = "";

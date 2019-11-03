@@ -1,6 +1,9 @@
 #ifndef __CPP_TOOLS__
 #define __CPP_TOOLS__
 // #include <iostream>
+#include <algorithm>
+#include <cstdlib>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -8,6 +11,14 @@ using std::string;
 using std::vector;
 
 #define WS_CHARS " \t\n\r\f\v"
+
+bool is_digits(const std::string& str);
+
+bool is_digits_old(const std::string& str);
+
+std::string& str_replace(std::string& s,
+                         const std::string& from,
+                         const std::string& to);
 
 // trim from end of string (right)
 inline std::string& rtrim(std::string& s, const char* t = WS_CHARS) {
@@ -28,7 +39,8 @@ inline std::string& trim(std::string& s, const char* t = WS_CHARS) {
 
 vector<string> split2(const string phrase,
                       const string delimiter = "\n",
-                      const bool once = false);
+                      bool once = false,
+                      bool trim_space = false);
 
 template <template <class, class, class...> class C,
           typename K,

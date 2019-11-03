@@ -5,6 +5,7 @@
 *.hex
 *.elf
 *.bin
+*.out
 build
 .DS_Store
 Objects

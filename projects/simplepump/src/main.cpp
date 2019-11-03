@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include "libs/FileServer.h"
 #include "libs/SimpleTimer.h"
+#include "libs/cmd.h"
 #include "libs/compat.h"
 #include "libs/config.h"
 #include "libs/cpptools.h"
@@ -9,10 +10,10 @@
 #include "libs/net.h"
 #include "libs/utils.h"
 
-using std::string;
+#undef PSTR
+#define PSTR
 
-#undef LED_BUILTIN
-#define LED_BUILTIN 2
+using std::string;
 
 #ifdef DEBUG_MODE
 const unsigned long RUN_INTERVAL = 60 * 1000UL;
@@ -25,8 +26,7 @@ const unsigned long RUN_DURATION = 15 * 1000UL;
 const char* ssid = STASSID;
 const char* password = STAPSK;
 const int led = LED_BUILTIN;
-// const int pump = D5;
-const int pump = 12;
+const int pump = 14;  // nodemcu D5
 
 unsigned long lastStart = 0;
 unsigned long lastStop = 0;
@@ -35,16 +35,14 @@ unsigned long totalSeconds = 0;
 
 int runTimerId, mqttTimerId, statusTimerId;
 #if defined(ESP32)
-const char* UPDATE_INDEX =
+const char* UPDATE_INDEX PROGMEM =
     "<form method='POST' action='/update' enctype='multipart/form-data'><input "
     "type='file' name='update'><input type='submit' value='Update'></form>";
 #endif
-const char REBOOT_RESPONSE[] =
+const char REBOOT_RESPONSE[] PROGMEM =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
+const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
 
-// using CMD_HANDLER_FUNC = std::function<void(char*, char*)>;
-using CMD_HANDLER_FUNC = std::function<void()>;
-std::map<std::string, CMD_HANDLER_FUNC> cmdHandlers;
 SimpleTimer timer;
 #if defined(ESP8266)
 ESP8266WebServer server(80);
@@ -52,24 +50,25 @@ ESP8266HTTPUpdateServer httpUpdater;
 #elif defined(ESP32)
 WebServer server(80);
 #endif
+CommandManager cmdMgr;
 
-void cmdEnable();
-void cmdDisable();
-void cmdStart();
-void cmdStop();
+void startPump();
+void stopPump();
 void checkPump();
 void checkWiFi();
+String getCommands();
 String getStatus();
+void statusReport();
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length);
 
-size_t debugLog(const String& text) {
+size_t debugLog(const String text) {
   String msg = "[";
   msg += dateTimeString();
   msg += "] ";
   msg += text;
   LOGN(msg);
-  mqttLog(msg);
-  File f = SPIFFS.open("/file/log.txt", "a");
+  mqttLog(text);
+  File f = SPIFFS.open(logFileName(), "a");
   if (!f) {
     return -1;
   }
@@ -81,73 +80,49 @@ size_t debugLog(const String& text) {
 
 ////////// Command Handlers Begin //////////
 
-void cmdEnable() {
+void cmdEnable(const vector<string> args = vector<string>()) {
   timer.enable(runTimerId);
-  debugLog("Timer enabled");
+  debugLog(F("Timer enabled"));
 }
-void cmdDisable() {
+void cmdDisable(const vector<string> args = vector<string>()) {
   timer.disable(runTimerId);
-  debugLog("Timer disabled");
+  debugLog(F("Timer disabled"));
 }
 
-void cmdStart() {
-  bool isOn = digitalRead(pump) == HIGH;
-  if (isOn) {
-    return;
-  }
-  lastStart = millis();
-  digitalWrite(pump, HIGH);
-  digitalWrite(led, LOW);
-  debugLog("Pump started");
-  mqttStatus("Pump started");
-  timer.setTimeout(RUN_DURATION, cmdStop);
+void cmdStart(const vector<string> args = vector<string>()) {
+  LOGN("cmdStart");
+  startPump();
 }
 
-void cmdStop() {
-  bool isOff = digitalRead(pump) == LOW;
-  if (isOff) {
-    return;
-  }
-  lastStop = millis();
-  if (lastStart > 0) {
-    lastSeconds = (lastStop - lastStart) / 1000;
-    totalSeconds += lastSeconds;
-  }
-  digitalWrite(pump, LOW);
-  digitalWrite(led, HIGH);
-  String msg = "Pump stopped,last:";
-  msg += lastSeconds;
-  msg += "s,total:";
-  msg += totalSeconds;
-  msg += "s";
-  debugLog(msg);
-  mqttStatus(msg);
+void cmdStop(const vector<string> args = vector<string>()) {
+  LOGN("cmdStop");
+  stopPump();
 }
 
-void cmdClear() {
-  SPIFFS.remove("/file/log.txt");
-  debugLog("Logs cleared");
+void cmdClear(const vector<string> args = vector<string>()) {
+  SPIFFS.remove(logFileName());
+  debugLog(F("Logs cleared"));
 }
 
-void cmdFiles() {
+void cmdFiles(const vector<string> args = vector<string>()) {
   LOGN("cmdFiles");
   mqttStatus(listFiles());
 }
 
-void cmdLogs() {
+void cmdLogs(const vector<string> args = vector<string>()) {
   LOGN("cmdLogs");
-  String logText = "Go to http://";
+  String logText = F("Go to http://");
   logText += WiFi.localIP().toString();
-  logText += "/file/log.txt";
+  logText += logFileName();
   mqttStatus(logText);
 }
 
-void cmdStatus() {
+void cmdStatus(const vector<string> args = vector<string>()) {
   LOGN("cmdStatus");
-  mqttStatus(getStatus());
+  statusReport();
 }
 
-void cmdWiFi() {
+void cmdWiFi(const vector<string> args = vector<string>()) {
   LOGN("cmdWiFi");
   String wf = "Mac=";
   wf += WiFi.macAddress();
@@ -160,12 +135,118 @@ void cmdWiFi() {
   mqttStatus(wf);
 }
 
-void cmdNotFound() {
+uint8_t parsePin(const string& extra) {
+  if (&extra == nullptr || extra.empty() || extra.length() > 2 ||
+      !is_digits(extra)) {
+    return 0xff;
+  }
+  return atoi(extra.c_str());
+}
+
+uint8_t parseValue(const string& extra) {
+  if (&extra == nullptr || extra.empty() || extra.length() > 1 ||
+      !is_digits(extra)) {
+    return 0xff;
+  }
+  return atoi(extra.c_str());
+}
+
+void cmdIOSet(const vector<string> args) {
+  LOGF("cmdIOSet");
+  if (args.size() < 3) {
+    return;
+  }
+  uint8_t pin = parsePin(args[1]);
+  if (pin == (uint8_t)0xff) {
+    mqttLog(F("Invalid Pin"));
+    return;
+  }
+  uint8_t value = parseValue(args[2]);
+  if (value > (uint8_t)1) {
+    mqttLog(F("Invalid Value"));
+    return;
+  }
+}
+
+void cmdIOSetHigh(const vector<string> args) {
+  LOGF("cmdIOSetHigh");
+  if (args.size() < 2) {
+    return;
+  }
+  uint8_t pin = parsePin(args[1]);
+  if (pin > (uint8_t)0x80) {
+    mqttLog("Invalid Pin");
+    return;
+  }
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, HIGH);
+  String msg = F("cmdIOSetHigh for Pin ");
+  msg += pin;
+  debugLog(msg);
+}
+
+void cmdIOSetLow(const vector<string> args) {
+  LOGF("cmdIOSetLow");
+  if (args.size() < 2) {
+    return;
+  }
+  uint8_t pin = parsePin(args[1]);
+  if (pin > (uint8_t)0x80) {
+    mqttLog("Invalid Pin");
+    return;
+  }
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
+  String msg = F("cmdIOSetLow for Pin ");
+  msg += pin;
+  debugLog(msg);
+}
+
+void cmdHelp(const vector<string> args = vector<string>()) {
+  LOGN("cmdHelp");
+  mqttStatus2(cmdMgr.getHelpDoc());
+}
+
+void cmdNotFound(const vector<string> args = vector<string>()) {
   LOGN("cmdNotFound");
   mqttLog("What?");
 }
 
 /////////// Command Handlers End ///////////
+
+void startPump() {
+  bool isOn = digitalRead(pump) == HIGH;
+  if (isOn) {
+    return;
+  }
+  lastStart = millis();
+  digitalWrite(pump, HIGH);
+  digitalWrite(led, LOW);
+  timer.setTimeout(RUN_DURATION, stopPump);
+  debugLog(F("Pump started"));
+  mqttStatus(F("Pump started"));
+}
+
+void stopPump() {
+  bool isOff = digitalRead(pump) == LOW;
+  if (isOff) {
+    return;
+  }
+  lastStop = millis();
+  if (lastStart > 0) {
+    lastSeconds = (lastStop - lastStart) / 1000;
+    totalSeconds += lastSeconds;
+  }
+  digitalWrite(pump, LOW);
+  digitalWrite(led, HIGH);
+  String msg = F("Pump stopped,last:");
+  msg += lastSeconds;
+  msg += "s,total:";
+  msg += totalSeconds;
+  msg += "s";
+  debugLog(msg);
+  mqttStatus(msg);
+}
 
 void checkPump() {
   bool isOn = digitalRead(pump) == HIGH;
@@ -178,7 +259,7 @@ void checkPump() {
 void checkWiFi() {
   if (!WiFi.isConnected()) {
     WiFi.reconnect();
-    debugLog("WiFi Reconnect");
+    debugLog(F("WiFi Reconnect"));
   }
 }
 
@@ -220,34 +301,43 @@ String getStatus() {
   return data;
 }
 
+void statusReport() {
+  mqttStatus(getStatus());
+}
+
 void handleFiles() {
-  server.send(200, "text/plain", listFiles());
+  server.send(200, MIME_TEXT_PLAIN, listFiles());
+}
+
+void handleLogs() {
+  File file = SPIFFS.open(logFileName(), "r");
+  server.streamFile(file, MIME_TEXT_PLAIN);
 }
 
 void handleStart() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdStart();
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
 void handleStop() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdStop();
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
 void handleClear() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdClear();
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
@@ -257,33 +347,33 @@ void reboot() {
 
 void handleReboot() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     timer.setTimeout(1000, reboot);
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
 void handleDisable() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdDisable();
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
 void handleEnable() {
   if (server.hasArg("do")) {
-    server.send(200, "text/plain", "ok");
+    server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdEnable();
   } else {
-    server.send(200, "text/plain", "ignore");
+    server.send(200, MIME_TEXT_PLAIN, "ignore");
   }
 }
 
 void handleRoot() {
-  server.send(200, "text/plain", getStatus().c_str());
+  server.send(200, MIME_TEXT_PLAIN, getStatus().c_str());
   showESP();
   //   String data = "text=";
   //   data += urlencode("Pump_Status_Report_");
@@ -293,6 +383,14 @@ void handleRoot() {
   //   httpsPost(WX_REPORT_URL, data);
 }
 
+void handleIOSet() {
+  for (auto i = 0; i < server.args(); i++) {
+    LOGF("handleIOSet %s=%s\n", server.argName(i).c_str(),
+         server.arg(i).c_str());
+  }
+  //   if (server.hasArg("pin") && server.hasArg("value")) {}
+}
+
 void setupWiFi() {
   digitalWrite(led, LOW);
   WiFi.mode(WIFI_STA);
@@ -300,9 +398,9 @@ void setupWiFi() {
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
 #if defined(ESP8266)
-  WiFi.hostname(getDevice().c_str());
+//   WiFi.hostname(getDevice().c_str());
 #elif defined(ESP32)
-  WiFi.setHostname(getDevice().c_str());
+//   WiFi.setHostname(getDevice().c_str());
 #endif
   WiFi.begin(ssid, password);
   Serial.print("WiFi Connecting");
@@ -382,10 +480,10 @@ void setupUpdate() {
 
 void handleNotFound() {
   if (!handleFileRead(&server)) {
-    String data = "ERROR: 404 NOT FOUND\nURI: ";
+    String data = F("ERROR: NOT FOUND\nURI: ");
     data += server.uri();
     data += "\n";
-    server.send(404, "text/plain", data);
+    server.send(404, MIME_TEXT_PLAIN, data);
   }
 }
 
@@ -403,10 +501,9 @@ void setupServer() {
   server.on("/enable", handleEnable);
   server.on("/on", handleEnable);
   server.on("/off", handleDisable);
+  server.on("/ioset", handleIOSet);
   server.on("/files", handleFiles);
-  //   server.serveStatic("/file/", SPIFFS, "/file/");
-  //   server.serveStatic("/www/", SPIFFS, "/www/");
-  server.serveStatic("/log", SPIFFS, "/file/log.txt");
+  server.on("/logs", handleLogs);
   server.onNotFound(handleNotFound);
   setupUpdate();
   server.begin();
@@ -415,29 +512,30 @@ void setupServer() {
 }
 
 void setupTimers() {
-  runTimerId = timer.setInterval(RUN_INTERVAL, cmdStart);
+  runTimerId = timer.setInterval(RUN_INTERVAL, startPump);
   timer.setInterval(RUN_DURATION / 2 + 2000, checkPump);
   timer.setInterval((MQTT_KEEPALIVE * 2 - 3) * 1000L, mqttCheck);
   timer.setInterval(5 * 60 * 1000L, checkWiFi);
-  timer.setInterval(60 * 60 * 1000L, cmdStatus);
-}
-
-void registerHandler(std::string cmd, CMD_HANDLER_FUNC func) {
-  cmdHandlers.insert(std::pair<std::string, CMD_HANDLER_FUNC>(cmd, func));
+  timer.setInterval(60 * 60 * 1000L, statusReport);
 }
 
 void setupCommands() {
-  registerHandler("on", cmdEnable);
-  registerHandler("enable", cmdEnable);
-  registerHandler("off", cmdDisable);
-  registerHandler("disable", cmdDisable);
-  registerHandler("start", cmdStart);
-  registerHandler("stop", cmdStop);
-  registerHandler("status", cmdStatus);
-  registerHandler("wifi", cmdWiFi);
-  registerHandler("logs", cmdLogs);
-  registerHandler("files", cmdFiles);
-  registerHandler("404", cmdNotFound);
+  cmdMgr.setDefaultHandler(cmdNotFound);
+  cmdMgr.addCommand("on", PSTR("set timer on"), cmdEnable);
+  cmdMgr.addCommand("enable", PSTR("set timer on"), cmdEnable);
+  cmdMgr.addCommand("off", PSTR("set timer off"), cmdDisable);
+  cmdMgr.addCommand("disable", PSTR("set timer off"), cmdDisable);
+  cmdMgr.addCommand("start", PSTR("start pump"), cmdStart);
+  cmdMgr.addCommand("stop", PSTR("stop pump"), cmdStop);
+  cmdMgr.addCommand("status", PSTR("get pump status"), cmdStatus);
+  cmdMgr.addCommand("wifi", PSTR("get wifi status"), cmdWiFi);
+  cmdMgr.addCommand("logs", PSTR("show logs"), cmdLogs);
+  cmdMgr.addCommand("files", PSTR("show files"), cmdFiles);
+  cmdMgr.addCommand("ioset", PSTR("gpio set [pin] [value]"), cmdIOSet);
+  cmdMgr.addCommand("ioset1", PSTR("gpio set to 1 for [pin]"), cmdIOSetHigh);
+  cmdMgr.addCommand("ioset0", PSTR("gpio set to 0 for  [pin]"), cmdIOSetLow);
+  cmdMgr.addCommand("list", PSTR("show available commands"), cmdHelp);
+  cmdMgr.addCommand("help", PSTR("show help message"), cmdHelp);
 }
 
 void setup(void) {
@@ -454,6 +552,7 @@ void setup(void) {
   setupServer();
   setupTimers();
   debugLog(F("System initialized"));
+  showESP();
 }
 
 void loop(void) {
@@ -471,31 +570,27 @@ bool checkCommand(string message) {
 }
 
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
-  yield();
   string message(payload, payload + length);
-  LOGF("[MQTT] Received [%s]:'%s' (%d)\n", topic, message.substr(0, 64).c_str(),
-       length);
+  str_replace(message, "\n", " ");
+  LOGF("[MQTT][%s] Message: [%s] - '%s' (%d)\n", timeString().c_str(), topic,
+       message.substr(0, 64).c_str(), length);
   if (!isMqttCmd(topic)) {
+    mqttLog("What?");
     return;
   }
-  ltrim(message);
+  trim(message);
   if (!checkCommand(message)) {
-    LOGN("[MQTT] Invalid Command");
+    LOGN(F("[MQTT] Invalid Command"));
     mqttLog("What?");
     return;
   }
 
-  vector<string> tokens = split2(message, " ", true);
-  string cmd;
-  string extra;
-  if (tokens.size() > 1) {
-    cmd = tokens[0];
-    extra = tokens[1];
-  } else {
-    cmd = tokens[0];
-    extra = "";
-  }
-  LOGF("[CMD] cmd='%s', extra='%s'\n", cmd.c_str(), extra.c_str());
-  CMD_HANDLER_FUNC func404(cmdNotFound);
-  GetWithDef(cmdHandlers, cmd.substr(1), func404)();
+  auto processFunc = [message] {
+    vector<string> args = split2(message, " ", false, true);
+    CommandParam param{args[0].substr(1), args};
+    // LOGN("[CMD] Processing command");
+    // LOGN(param.toString().c_str());
+    cmdMgr.handle(param);
+  };
+  timer.setTimeout(5, processFunc);
 }

@@ -16,7 +16,6 @@
 #define LOGF(...)
 #endif
 
-void _log(const char* format, ...);
 String listFiles();
 void fsCheck();
 String getDevice();
