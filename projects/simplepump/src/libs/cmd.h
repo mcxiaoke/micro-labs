@@ -3,11 +3,15 @@
 
 #include <Arduino.h>
 #include <algorithm>
+#include <functional>
 #include <map>
-#include "cpptools.h"
+#include <vector>
+#include "../ext/extstring.hpp"
 
 using std::string;
-using CMD_HANDLER_FUNC = std::function<void(vector<string>)>;
+using std::vector;
+
+using CMD_HANDLER_FUNC = std::function<void(std::vector<string>)>;
 // using CMD_HANDLER_FUNC = void (*)(vector<string>);
 
 struct Command {

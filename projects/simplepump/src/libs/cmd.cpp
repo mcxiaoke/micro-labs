@@ -7,11 +7,9 @@ string Command::toString() const {
 }
 
 string CommandParam::toString() const {
-  string s("CMD:");
-  s.append(name);
-  s.append("\nARGS:");
+  string s("Command:");
   for (auto const& arg : args) {
-    s.append(arg).append(",");
+    s.append(arg).append(" ");
   }
   return s;
 }

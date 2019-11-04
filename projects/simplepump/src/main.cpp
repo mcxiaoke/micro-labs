@@ -1,17 +1,18 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include "ext/extstring.hpp"
+#include "libs/ESPUpdateServer.h"
 #include "libs/FileServer.h"
 #include "libs/SimpleTimer.h"
 #include "libs/cmd.h"
 #include "libs/compat.h"
 #include "libs/config.h"
-#include "libs/cpptools.h"
 #include "libs/mqtt.h"
 #include "libs/net.h"
 #include "libs/utils.h"
 
-#undef PSTR
-#define PSTR
+// #undef PSTR
+// #define PSTR
 
 using std::string;
 
@@ -34,11 +35,6 @@ unsigned long lastSeconds = 0;
 unsigned long totalSeconds = 0;
 
 int runTimerId, mqttTimerId, statusTimerId;
-#if defined(ESP32)
-const char* UPDATE_INDEX PROGMEM =
-    "<form method='POST' action='/update' enctype='multipart/form-data'><input "
-    "type='file' name='update'><input type='submit' value='Update'></form>";
-#endif
 const char REBOOT_RESPONSE[] PROGMEM =
     "<META http-equiv=\"refresh\" content=\"15;URL=/\">Rebooting...\n";
 const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
@@ -46,10 +42,10 @@ const char MIME_TEXT_PLAIN[] PROGMEM = "text/plain";
 SimpleTimer timer;
 #if defined(ESP8266)
 ESP8266WebServer server(80);
-ESP8266HTTPUpdateServer httpUpdater;
 #elif defined(ESP32)
 WebServer server(80);
 #endif
+ESPUpdateServer otaUpdate(true);
 CommandManager cmdMgr;
 
 void startPump();
@@ -137,7 +133,7 @@ void cmdWiFi(const vector<string> args = vector<string>()) {
 
 uint8_t parsePin(const string& extra) {
   if (&extra == nullptr || extra.empty() || extra.length() > 2 ||
-      !is_digits(extra)) {
+      !extstring::is_digits(extra)) {
     return 0xff;
   }
   return atoi(extra.c_str());
@@ -145,7 +141,7 @@ uint8_t parsePin(const string& extra) {
 
 uint8_t parseValue(const string& extra) {
   if (&extra == nullptr || extra.empty() || extra.length() > 1 ||
-      !is_digits(extra)) {
+      !extstring::is_digits(extra)) {
     return 0xff;
   }
   return atoi(extra.c_str());
@@ -215,6 +211,7 @@ void cmdNotFound(const vector<string> args = vector<string>()) {
 /////////// Command Handlers End ///////////
 
 void startPump() {
+  LOGN("startPump");
   bool isOn = digitalRead(pump) == HIGH;
   if (isOn) {
     return;
@@ -228,6 +225,7 @@ void startPump() {
 }
 
 void stopPump() {
+  LOGN("stopPump");
   bool isOff = digitalRead(pump) == LOW;
   if (isOff) {
     return;
@@ -257,6 +255,7 @@ void checkPump() {
 }
 
 void checkWiFi() {
+//   LOGN("checkWiFi");
   if (!WiFi.isConnected()) {
     WiFi.reconnect();
     debugLog(F("WiFi Reconnect"));
@@ -302,19 +301,23 @@ String getStatus() {
 }
 
 void statusReport() {
+  LOGN("statusReport");
   mqttStatus(getStatus());
 }
 
 void handleFiles() {
+  LOGN("handleFiles");
   server.send(200, MIME_TEXT_PLAIN, listFiles());
 }
 
 void handleLogs() {
+  LOGN("handleLogs");
   File file = SPIFFS.open(logFileName(), "r");
   server.streamFile(file, MIME_TEXT_PLAIN);
 }
 
 void handleStart() {
+  LOGN("handleStart");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdStart();
@@ -324,6 +327,7 @@ void handleStart() {
 }
 
 void handleStop() {
+  LOGN("handleStop");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdStop();
@@ -333,6 +337,7 @@ void handleStop() {
 }
 
 void handleClear() {
+  LOGN("handleClear");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdClear();
@@ -346,6 +351,7 @@ void reboot() {
 }
 
 void handleReboot() {
+  LOGN("handleReboot");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     timer.setTimeout(1000, reboot);
@@ -355,6 +361,7 @@ void handleReboot() {
 }
 
 void handleDisable() {
+  LOGN("handleDisable");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdDisable();
@@ -364,6 +371,7 @@ void handleDisable() {
 }
 
 void handleEnable() {
+  LOGN("handleEnable");
   if (server.hasArg("do")) {
     server.send(200, MIME_TEXT_PLAIN, "ok");
     cmdEnable();
@@ -373,6 +381,7 @@ void handleEnable() {
 }
 
 void handleRoot() {
+  LOGN("handleRoot");
   server.send(200, MIME_TEXT_PLAIN, getStatus().c_str());
   showESP();
   //   String data = "text=";
@@ -392,6 +401,7 @@ void handleIOSet() {
 }
 
 void setupWiFi() {
+  LOGN("setupWiFi");
   digitalWrite(led, LOW);
   WiFi.mode(WIFI_STA);
   //   WiFi.setSleepMode(WIFI_NONE_SLEEP);
@@ -423,62 +433,17 @@ void setupWiFi() {
 }
 
 void setupDate() {
+  LOGN("setupDate");
   setTimestamp();
 }
 
 void setupUpdate() {
-#if defined(ESP8266)
-  httpUpdater.setup(&server);
-#elif defined(ESP32)
-  server.on("/update", HTTP_GET, []() {
-    server.sendHeader("Connection", "close");
-    server.send(200, "text/html", UPDATE_INDEX);
-  });
-  server.on(
-      "/update", HTTP_POST,
-      []() {
-        server.sendHeader("Connection", "close");
-        server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
-        ESP.restart();
-      },
-      []() {
-        HTTPUpload& upload = server.upload();
-        if (upload.status == UPLOAD_FILE_START) {
-          Serial.setDebugOutput(true);
-          int command =
-              (upload.filename.indexOf("spiffs") > -1) ? U_SPIFFS : U_FLASH;
-          Serial.printf("[OTA] Update Start: %s\n", upload.filename.c_str());
-          Serial.printf("[OTA] Update Type: %s\n",
-                        command == U_FLASH ? "Firmware" : "Spiffs");
-          if (!Update.begin(UPDATE_SIZE_UNKNOWN, command, led)) {
-            // start with max available size
-            Update.printError(Serial);
-          }
-        } else if (upload.status == UPLOAD_FILE_WRITE) {
-          if (Update.write(upload.buf, upload.currentSize) !=
-              upload.currentSize) {
-            Update.printError(Serial);
-          }
-        } else if (upload.status == UPLOAD_FILE_END) {
-          // true to set the size to the current progress
-          if (Update.end(true)) {
-            Serial.printf("[OTA] Update Success: %u\nRebooting...\n",
-                          upload.totalSize);
-          } else {
-            Update.printError(Serial);
-          }
-          Serial.setDebugOutput(false);
-        } else {
-          Serial.printf(
-              "[OTA] Update Failed Unexpectedly (likely broken connection): "
-              "status=%d\n",
-              upload.status);
-        }
-      });
-#endif
+  LOGN("setupUpdate");
+  otaUpdate.setup(&server);
 }
 
 void handleNotFound() {
+  LOGN("handleNotFound");
   if (!handleFileRead(&server)) {
     String data = F("ERROR: NOT FOUND\nURI: ");
     data += server.uri();
@@ -488,6 +453,7 @@ void handleNotFound() {
 }
 
 void setupServer() {
+  LOGN("setupServer");
   if (MDNS.begin(getDevice().c_str())) {
     LOGN(F("[Server] MDNS responder started"));
   }
@@ -512,6 +478,7 @@ void setupServer() {
 }
 
 void setupTimers() {
+  LOGN("setupTimers");
   runTimerId = timer.setInterval(RUN_INTERVAL, startPump);
   timer.setInterval(RUN_DURATION / 2 + 2000, checkPump);
   timer.setInterval((MQTT_KEEPALIVE * 2 - 3) * 1000L, mqttCheck);
@@ -520,22 +487,23 @@ void setupTimers() {
 }
 
 void setupCommands() {
+  LOGN("setupCommands");
   cmdMgr.setDefaultHandler(cmdNotFound);
-  cmdMgr.addCommand("on", PSTR("set timer on"), cmdEnable);
-  cmdMgr.addCommand("enable", PSTR("set timer on"), cmdEnable);
-  cmdMgr.addCommand("off", PSTR("set timer off"), cmdDisable);
-  cmdMgr.addCommand("disable", PSTR("set timer off"), cmdDisable);
-  cmdMgr.addCommand("start", PSTR("start pump"), cmdStart);
-  cmdMgr.addCommand("stop", PSTR("stop pump"), cmdStop);
-  cmdMgr.addCommand("status", PSTR("get pump status"), cmdStatus);
-  cmdMgr.addCommand("wifi", PSTR("get wifi status"), cmdWiFi);
-  cmdMgr.addCommand("logs", PSTR("show logs"), cmdLogs);
-  cmdMgr.addCommand("files", PSTR("show files"), cmdFiles);
-  cmdMgr.addCommand("ioset", PSTR("gpio set [pin] [value]"), cmdIOSet);
-  cmdMgr.addCommand("ioset1", PSTR("gpio set to 1 for [pin]"), cmdIOSetHigh);
-  cmdMgr.addCommand("ioset0", PSTR("gpio set to 0 for  [pin]"), cmdIOSetLow);
-  cmdMgr.addCommand("list", PSTR("show available commands"), cmdHelp);
-  cmdMgr.addCommand("help", PSTR("show help message"), cmdHelp);
+  cmdMgr.addCommand("on", "set timer on", cmdEnable);
+  cmdMgr.addCommand("enable", "set timer on", cmdEnable);
+  cmdMgr.addCommand("off", "set timer off", cmdDisable);
+  cmdMgr.addCommand("disable", "set timer off", cmdDisable);
+  cmdMgr.addCommand("start", "start pump", cmdStart);
+  cmdMgr.addCommand("stop", "stop pump", cmdStop);
+  cmdMgr.addCommand("status", "get pump status", cmdStatus);
+  cmdMgr.addCommand("wifi", "get wifi status", cmdWiFi);
+  cmdMgr.addCommand("logs", "show logs", cmdLogs);
+  cmdMgr.addCommand("files", "show files", cmdFiles);
+  cmdMgr.addCommand("ioset", "gpio set [pin] [value]", cmdIOSet);
+  cmdMgr.addCommand("ioset1", "gpio set to 1 for [pin]", cmdIOSetHigh);
+  cmdMgr.addCommand("ioset0", "gpio set to 0 for  [pin]", cmdIOSetLow);
+  cmdMgr.addCommand("list", "show available commands", cmdHelp);
+  cmdMgr.addCommand("help", "show help message", cmdHelp);
 }
 
 void setup(void) {
@@ -565,20 +533,21 @@ void loop(void) {
 }
 
 bool checkCommand(string message) {
+//   LOGN("checkCommand");
   static const char* CMD_PREFIX = "/#@!$%";
   return message.length() > 2 && strchr(CMD_PREFIX, message.at(0)) != nullptr;
 }
 
 void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   string message(payload, payload + length);
-  str_replace(message, "\n", " ");
-  LOGF("[MQTT][%s] Message: [%s] - '%s' (%d)\n", timeString().c_str(), topic,
+  message = extstring::replace_all(message, "\n", " ");
+  LOGF("[MQTT][%s][%s] '%s' (%d)\n", timeString().c_str(), topic,
        message.substr(0, 64).c_str(), length);
   if (!isMqttCmd(topic)) {
     mqttLog("What?");
     return;
   }
-  trim(message);
+  extstring::trim(message);
   if (!checkCommand(message)) {
     LOGN(F("[MQTT] Invalid Command"));
     mqttLog("What?");
@@ -586,10 +555,14 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   }
 
   auto processFunc = [message] {
-    vector<string> args = split2(message, " ", false, true);
+    // vector<string> args = split2(message, " ", false, true);
+    vector<string> args = extstring::split_any(message);
+    for (auto arg : args) {
+      extstring::trim(arg);
+    }
     CommandParam param{args[0].substr(1), args};
-    // LOGN("[CMD] Processing command");
-    // LOGN(param.toString().c_str());
+    LOG("[CMD] Processing ");
+    LOGN(param.toString().c_str());
     cmdMgr.handle(param);
   };
   timer.setTimeout(5, processFunc);
