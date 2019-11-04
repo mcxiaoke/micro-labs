@@ -6,13 +6,11 @@
 #include <functional>
 #include <map>
 #include <vector>
-#include "../ext/extstring.hpp"
 
 using std::string;
 using std::vector;
 
 using CMD_HANDLER_FUNC = std::function<void(std::vector<string>)>;
-// using CMD_HANDLER_FUNC = void (*)(vector<string>);
 
 struct Command {
   const string name;

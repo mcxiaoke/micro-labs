@@ -7,10 +7,12 @@ string Command::toString() const {
 }
 
 string CommandParam::toString() const {
-  string s("Command:");
+  string s("{");
   for (auto const& arg : args) {
-    s.append(arg).append(" ");
+    s.append(" ").append(arg);
   }
+  s.append("}");
+  s.erase(1,1);
   return s;
 }
 

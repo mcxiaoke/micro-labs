@@ -3,21 +3,50 @@
 
 #include <Arduino.h>
 #include <PubSubClient.h>
+#include "cmd.h"
 #include "config.h"
+#include "ext/string/string.hpp"
 #include "utils.h"
 
-bool isMqttConnected();
-bool isMqttCmd(const char topic[]);
-String getStatusTopic();
-String getLogTopic();
-String getCmdTopic();
-void mqttStatus(const String& text);
-void mqttStatus2(const std::string& text);
-void mqttLog(const String& text);
-void mqttLog2(const std::string& text);
-void mqttConnect();
-void mqttCheck();
-void mqttBegin(MQTT_CALLBACK_SIGNATURE);
-void mqttLoop();
+using std::string;
+
+using MQTT_CALLBACK_FUNC = std::function<void(char*, uint8_t*, unsigned int)>;
+
+class MqttManager {
+ public:
+  MqttManager(const char* server,
+              const int port,
+              const char* username,
+              const char* password);
+  bool isConnected();
+  String getUser();
+  String getPass();
+  String getClientId();
+  void sendStatus(const String& text);
+  void sendStatus2(const std::string& text);
+  void sendLog(const String& text);
+  void sendLog2(const std::string& text);
+  void connect();
+  void check();
+  void begin(CMD_HANDLER_FUNC);
+  void loop();
+
+ private:
+  const char* _server;
+  const int _port;
+  const char* _username;
+  const char* _password;
+  WiFiClient _client;
+  PubSubClient* _mqtt;
+  CMD_HANDLER_FUNC _handler;
+  bool isCommand(const string& topic);
+  void handleMessage(const char* topic,
+                     const uint8_t* payload,
+                     const unsigned int length);
+  void sendOnline();
+  string getStatusTopic();
+  string getLogTopic();
+  string getCmdTopic();
+};
 
 #endif
