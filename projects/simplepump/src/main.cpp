@@ -527,7 +527,7 @@ void setup(void) {
   setupTimers();
   showESP();
   mqttMgr.begin(handleCommand);
-  debugLog(F("System initialized"));
+  debugLog(F("System Boot"));
 }
 
 void loop(void) {

@@ -178,13 +178,13 @@ void MqttManager::handleMessage(const char* _topic,
                                 const unsigned int _length) {
   yield();
   string topic(_topic);
-  string message(_payload, _payload + _length);
+  string message(_payload, _payload + std::min(_length, COMMAND_MAX_LENGTH));
   // replace newline for log print
   message = extstring::replace_all(message, "\n", " ");
-  LOGF("[MQTT][%s][%s] '%s' (%d)\n", timeString().c_str(),
-       topic.c_str(), message.substr(0, 64).c_str(), message.size());
+  LOGF("[MQTT][%s][%s] '%s' (%d)\n", timeString().c_str(), topic.c_str(),
+       message.substr(0, 64).c_str(), _length);
   if (!isCommand(topic)) {
-      LOGN(F("[MQTT] Not a command"));
+    LOGN(F("[MQTT] Not a command"));
     sendLog("What?");
     return;
   }
